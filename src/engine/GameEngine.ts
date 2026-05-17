@@ -1,9 +1,9 @@
-import { 
-  Engine, 
-  Scene, 
-  ArcRotateCamera, 
-  Vector3, 
-  HemisphericLight, 
+import {
+  Engine,
+  Scene,
+  ArcRotateCamera,
+  Vector3,
+  HemisphericLight,
   DirectionalLight,
   ShadowGenerator,
   Color3,
@@ -28,11 +28,11 @@ export class GameEngine {
     this.canvas = canvas;
     this.engine = new Engine(this.canvas, true);
     this.scene = new Scene(this.engine);
-    
+
     this.setupCamera();
     this.setupScene();
     this.setupLights();
-    
+
     this.engine.runRenderLoop(() => {
       this.scene.render();
     });
@@ -45,7 +45,7 @@ export class GameEngine {
   private setupScene() {
     // Transparent background so the beautiful CSS grand_line_bg.png shows through!
     this.scene.clearColor = new Color4(0, 0, 0, 0);
-    
+
     // Default Rendering Pipeline (Bloom, Chromatic Aberration, Grain)
     const pipeline = new DefaultRenderingPipeline(
       'defaultPipeline',
@@ -119,7 +119,7 @@ export class GameEngine {
 
   public focusCameraOn(target: Vector3, duration: number = 1000) {
     if (!this.camera) return;
-    
+
     const animation = new Animation(
       'cameraFocus',
       'target',

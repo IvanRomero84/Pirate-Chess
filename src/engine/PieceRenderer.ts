@@ -53,10 +53,11 @@ export class PieceRenderer {
     mesh.isVisible = true;
 
     const squareName = this.getSquareName(row, col);
+    const existingMeta = mesh.metadata || {};
     const meta = {
+      ...existingMeta,
       type, color, id, row, col, squareName,
-      isFallback: !this.assets.arePiecesLoaded(),
-      animationGroups: [] as AnimationGroup[]
+      isFallback: !this.assets.arePiecesLoaded()
     };
     mesh.metadata = meta;
 
@@ -65,6 +66,10 @@ export class PieceRenderer {
 
     this.pieces.set(id, mesh);
     this.piecesBySquare.set(squareName, mesh);
+
+    // Play idle standing animation immediately!
+    this.playIdleAnimation(mesh);
+
     return mesh;
   }
 
@@ -162,7 +167,53 @@ export class PieceRenderer {
     });
 
     const currentHeight = maxY - minY;
-    const targetHeight = PIECE_TARGET_HEIGHTS[type] ?? 0.55;
+    let targetHeight = PIECE_TARGET_HEIGHTS[type] ?? 0.55;
+
+    // Canon One Piece character height overrides
+    if (color === 'w') {
+      // Straw Hat Pirates (White side)
+      if (type === 'p') {
+        // Tony Tony Chopper - 90 cm cute doctor pawn!
+        targetHeight = 0.45;
+      } else if (type === 'r') {
+        // Franky - 240 cm towering cyborg!
+        targetHeight = 0.85;
+      } else if (type === 'n') {
+        // Sanji - 180 cm master chef!
+        targetHeight = 0.71;
+      } else if (type === 'b') {
+        // Roronoa Zoro - 181 cm swordsman!
+        targetHeight = 0.71;
+      } else if (type === 'q') {
+        // Nami - 170 cm navigator!
+        targetHeight = 0.66;
+      } else if (type === 'k') {
+        // Monkey D. Luffy - 174 cm King of the Pirates!
+        targetHeight = 0.68;
+      }
+    } else {
+      // Marines / World Government (Black side)
+      if (type === 'p') {
+        // Marine Soldier pawn
+        targetHeight = 0.65;
+      } else if (type === 'r') {
+        // Monkey D. Garp - 287 cm legendary marine hero!
+        targetHeight = 0.92;
+      } else if (type === 'n') {
+        // Borsalino (Kizaru) - 302 cm tall Admiral!
+        targetHeight = 0.96;
+      } else if (type === 'b') {
+        // Captain Koby - 167 cm brave marine hero!
+        targetHeight = 0.66;
+      } else if (type === 'q') {
+        // Kuzan (Aokiji) - 298 cm tall Admiral!
+        targetHeight = 0.95;
+      } else if (type === 'k') {
+        // Sakazuki (Akainu) - 306 cm tall Fleet Admiral!
+        targetHeight = 0.98;
+      }
+    }
+
     const scale = currentHeight > 0.0001 ? targetHeight / currentHeight : 1;
 
     mesh.scaling = new Vector3(scale, scale, scale);
@@ -258,24 +309,55 @@ export class PieceRenderer {
     }
 
     const targetPos = this.getBoardPosition(toRow, toCol);
+    // Keep the piece's custom base Y position intact so it sits perfectly on the board surface during the slide
+    targetPos.y = piece.position.y;
 
-    const animation = new Animation(
-      'moveAnim', 'position', 60,
-      Animation.ANIMATIONTYPE_VECTOR3,
-      Animation.ANIMATIONLOOPMODE_CONSTANT
-    );
+    const hasAnimations = piece.metadata?.animationGroups && piece.metadata.animationGroups.length > 0;
 
-    animation.setKeys([
-      { frame: 0, value: piece.position.clone() },
-      { frame: 45, value: targetPos }
-    ]);
+    if (hasAnimations) {
+      // 1. Play skeletal walk/run animation for rigged characters
+      this.playWalkAnimation(piece);
 
-    const easing = new QuadraticEase();
-    easing.setEasingMode(EasingFunction.EASINGMODE_EASEINOUT);
-    animation.setEasingFunction(easing);
+      const animation = new Animation(
+        'moveAnim', 'position', 60,
+        Animation.ANIMATIONTYPE_VECTOR3,
+        Animation.ANIMATIONLOOPMODE_CONSTANT
+      );
 
-    piece.animations = [animation];
-    await this.scene.beginAnimation(piece, 0, 45, false).waitAsync();
+      animation.setKeys([
+        { frame: 0, value: piece.position.clone() },
+        { frame: 45, value: targetPos }
+      ]);
+
+      const easing = new QuadraticEase();
+      easing.setEasingMode(EasingFunction.EASINGMODE_EASEINOUT);
+      animation.setEasingFunction(easing);
+
+      piece.animations = [animation];
+      await this.scene.beginAnimation(piece, 0, 45, false).waitAsync();
+
+      // Revert back to idle standing animation once piece reaches destination!
+      this.playIdleAnimation(piece);
+    } else {
+      // 2. Linear slide for static T-pose characters (sliding flat on the board surface, i.e. "running" straight)
+      const animation = new Animation(
+        'moveAnim', 'position', 60,
+        Animation.ANIMATIONTYPE_VECTOR3,
+        Animation.ANIMATIONLOOPMODE_CONSTANT
+      );
+
+      animation.setKeys([
+        { frame: 0, value: piece.position.clone() },
+        { frame: 45, value: targetPos }
+      ]);
+
+      const easing = new QuadraticEase();
+      easing.setEasingMode(EasingFunction.EASINGMODE_EASEINOUT);
+      animation.setEasingFunction(easing);
+
+      piece.animations = [animation];
+      await this.scene.beginAnimation(piece, 0, 45, false).waitAsync();
+    }
 
     const oldSquare = piece.metadata.squareName;
     const newSquare = this.getSquareName(toRow, toCol);
@@ -346,8 +428,74 @@ export class PieceRenderer {
   }
 
   // ---------------------------------------------------------------------------
-  // UTILITIES
+  // ANIMATION HELPERS
   // ---------------------------------------------------------------------------
+
+  private playIdleAnimation(piece: AbstractMesh) {
+    const ags = piece.metadata?.animationGroups as AnimationGroup[];
+    if (!ags || ags.length === 0) return;
+
+    // Stop all other running animations
+    ags.forEach(ag => ag.stop());
+
+    const type = piece.metadata?.type;
+    const color = piece.metadata?.color;
+    let idleAg: AnimationGroup | undefined;
+
+    if (type === 'b' && color === 'b') {
+      // Captain Koby - Fighting Path ID '0011' is his resting idle stance
+      idleAg = ags.find(ag => ag.name.includes('0011'));
+    }
+
+    if (!idleAg) {
+      // Look for standard idle/stance/wait animations
+      idleAg = ags.find(ag => {
+        const name = ag.name.toLowerCase();
+        return name.includes('idle') || name.includes('wait') || name.includes('stand') || name.includes('pose') || name.includes('default');
+      });
+    }
+
+    if (!idleAg) {
+      idleAg = ags[0];
+    }
+
+    if (idleAg) {
+      idleAg.start(true);
+    }
+  }
+
+  private playWalkAnimation(piece: AbstractMesh) {
+    const ags = piece.metadata?.animationGroups as AnimationGroup[];
+    if (!ags || ags.length === 0) return;
+
+    // Stop all other running animations
+    ags.forEach(ag => ag.stop());
+
+    const type = piece.metadata?.type;
+    const color = piece.metadata?.color;
+    let walkAg: AnimationGroup | undefined;
+
+    if (type === 'b' && color === 'b') {
+      // Captain Koby - Fighting Path ID '0110' is his standard running animation
+      walkAg = ags.find(ag => ag.name.includes('0110') || ag.name.includes('0021'));
+    }
+
+    if (!walkAg) {
+      // Look for walking/running/moving animations
+      walkAg = ags.find(ag => {
+        const name = ag.name.toLowerCase();
+        return name.includes('walk') || name.includes('run') || name.includes('move') || name.includes('jog');
+      });
+    }
+
+    if (!walkAg) {
+      walkAg = ags[0];
+    }
+
+    if (walkAg) {
+      walkAg.start(true);
+    }
+  }
 
   private getSquareName(row: number, col: number): string {
     const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
