@@ -1,0 +1,356 @@
+import {
+  Scene,
+  MeshBuilder,
+  PBRMaterial,
+  Color3,
+  Vector3,
+  Mesh,
+  AbstractMesh,
+  Animation,
+  AnimationGroup,
+  QuadraticEase,
+  EasingFunction
+} from '@babylonjs/core';
+import type { PieceType, PieceColor } from '../core/types';
+import { AssetManager } from './AssetManager';
+
+// Target heights in board units per piece type
+const PIECE_TARGET_HEIGHTS: Record<string, number> = {
+  p: 0.52,
+  r: 0.65,
+  n: 0.55,
+  b: 0.62,
+  q: 0.70,
+  k: 0.78,
+};
+
+export class PieceRenderer {
+  private scene: Scene;
+  private assets: AssetManager;
+  private pieces: Map<string, AbstractMesh> = new Map();
+  private piecesBySquare: Map<string, AbstractMesh> = new Map();
+  private selectionRing: Mesh | null = null;
+
+  // Fallback shared materials (only used when 3D models unavailable)
+  private matFallback_w: PBRMaterial | null = null;
+  private matFallback_b: PBRMaterial | null = null;
+
+  constructor(scene: Scene, assets: AssetManager) {
+    this.scene = scene;
+    this.assets = assets;
+  }
+
+  // ---------------------------------------------------------------------------
+  // PUBLIC API
+  // ---------------------------------------------------------------------------
+
+  public createPiece(type: PieceType, color: PieceColor, id: string, row: number, col: number): AbstractMesh {
+    const mesh = this.buildMesh(type, color, id);
+    mesh.name = id;
+
+    const pos = this.getBoardPosition(row, col);
+    mesh.position = pos;
+    mesh.isVisible = true;
+
+    const squareName = this.getSquareName(row, col);
+    const meta = {
+      type, color, id, row, col, squareName,
+      isFallback: !this.assets.arePiecesLoaded(),
+      animationGroups: [] as AnimationGroup[]
+    };
+    mesh.metadata = meta;
+
+    // Propagate metadata to child meshes so click-picking works on sub-geometry
+    mesh.getChildMeshes().forEach(child => { child.metadata = meta; });
+
+    this.pieces.set(id, mesh);
+    this.piecesBySquare.set(squareName, mesh);
+    return mesh;
+  }
+
+  /**
+   * Incremental sync — only removes captured pieces and places new ones.
+   * Unmoved pieces are left completely untouched (no dispose/recreate).
+   * Also replaces fallback primitives with 3D models when assets finish loading.
+   */
+  public syncBoardIncremental(boardState: (({ type: string; color: string } | null))[][]) {
+    const expected = new Map<string, { type: string; color: string; row: number; col: number }>();
+    const assetsLoaded = this.assets.arePiecesLoaded();
+
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        const piece = boardState[r][c];
+        if (piece) {
+          const row = 7 - r;
+          const squareName = this.getSquareName(row, c);
+          expected.set(squareName, { type: piece.type, color: piece.color, row, col: c });
+        }
+      }
+    }
+
+    // Remove pieces that were captured, changed, or are fallback primitives when 3D models are now loaded
+    for (const [squareName, mesh] of this.piecesBySquare) {
+      const exp = expected.get(squareName);
+      const isFallback = mesh.metadata?.isFallback ?? false;
+
+      if (!exp || exp.type !== mesh.metadata.type || exp.color !== mesh.metadata.color || (isFallback && assetsLoaded)) {
+        this.disposePiece(mesh);
+      }
+    }
+
+    // Add pieces that are missing
+    for (const [squareName, exp] of expected) {
+      if (!this.piecesBySquare.has(squareName)) {
+        this.createPiece(exp.type as PieceType, exp.color as PieceColor, squareName, exp.row, exp.col);
+      }
+    }
+  }
+
+  /** Full clear — used on game reset only. */
+  public clearPieces() {
+    for (const mesh of this.pieces.values()) {
+      this.disposePiece(mesh);
+    }
+    this.pieces = new Map();
+    this.piecesBySquare = new Map();
+    this.clearSelection();
+  }
+
+  private disposePiece(mesh: AbstractMesh) {
+    this.pieces.delete(mesh.metadata?.id);
+    this.piecesBySquare.delete(mesh.metadata?.squareName);
+    mesh.dispose(false, false); // don't dispose shared materials
+  }
+
+  // ---------------------------------------------------------------------------
+  // MESH BUILDING
+  // ---------------------------------------------------------------------------
+
+  private buildMesh(type: PieceType, color: PieceColor, id: string): AbstractMesh {
+    // Try individual 3D piece models
+    if (this.assets.arePiecesLoaded()) {
+      const cloned = this.assets.clonePiece(type, color);
+      if (cloned) {
+        return this.prepareClonedMesh(cloned, type, color);
+      }
+    }
+
+    // Fallback: geometric primitives
+    return this.buildPrimitiveMesh(type, color, id);
+  }
+
+  /**
+   * Normalize the cloned mesh size and orient it correctly on the board.
+   */
+  private prepareClonedMesh(mesh: AbstractMesh, type: PieceType, color: PieceColor): AbstractMesh {
+    // Force world matrix update so bounding info is accurate
+    mesh.computeWorldMatrix(true);
+
+    // Collect all meshes in the hierarchy for bounding computation
+    const allMeshes: AbstractMesh[] = [mesh, ...mesh.getChildMeshes()];
+
+    // Find the tight Y-extent of the piece in its original scale
+    let minY = Infinity;
+    let maxY = -Infinity;
+    allMeshes.forEach(m => {
+      m.computeWorldMatrix(true);
+      const info = m.getBoundingInfo();
+      if (info) {
+        minY = Math.min(minY, info.boundingBox.minimumWorld.y);
+        maxY = Math.max(maxY, info.boundingBox.maximumWorld.y);
+      }
+    });
+
+    const currentHeight = maxY - minY;
+    const targetHeight = PIECE_TARGET_HEIGHTS[type] ?? 0.55;
+    const scale = currentHeight > 0.0001 ? targetHeight / currentHeight : 1;
+
+    mesh.scaling = new Vector3(scale, scale, scale);
+
+    // Sit on the board surface
+    // After scaling, the piece bottom is at minY * scale; we want it at 0.1 (board surface)
+    mesh.position = new Vector3(0, 0.1 - minY * scale, 0);
+
+    // White faces toward white's side (z+), black faces toward black's side (z-)
+    mesh.rotationQuaternion = null;
+    mesh.rotation = new Vector3(0, color === 'b' ? Math.PI : 0, 0);
+
+    mesh.receiveShadows = true;
+    mesh.getChildMeshes().forEach(c => { c.receiveShadows = true; });
+
+    return mesh;
+  }
+
+  private buildPrimitiveMesh(type: PieceType, color: PieceColor, id: string): Mesh {
+    const size = 0.6;
+    let mesh: Mesh;
+
+    switch (type) {
+      case 'p':
+        mesh = MeshBuilder.CreateCylinder('pawn', { diameter: size * 0.5, height: size * 0.9, tessellation: 12 }, this.scene);
+        mesh.position.y = (size * 0.9) / 2;
+        break;
+      case 'r':
+        mesh = MeshBuilder.CreateBox('rook', { size: size * 0.9 }, this.scene);
+        mesh.position.y = (size * 0.9) / 2;
+        break;
+      case 'n':
+        mesh = MeshBuilder.CreateCylinder('knight', { diameter: size * 0.8, height: size }, this.scene);
+        mesh.position.y = size / 2;
+        break;
+      case 'b':
+        mesh = MeshBuilder.CreateCylinder('bishop', { diameterTop: 0.1, diameterBottom: size * 0.8, height: size * 1.2 }, this.scene);
+        mesh.position.y = (size * 1.2) / 2;
+        break;
+      case 'q':
+        mesh = MeshBuilder.CreateTorus('queen', { diameter: size, thickness: 0.2 }, this.scene);
+        mesh.position.y = 0.1;
+        break;
+      case 'k':
+        mesh = MeshBuilder.CreateBox('king', { width: size * 0.5, height: size * 1.5, depth: size * 0.5 }, this.scene);
+        mesh.position.y = (size * 1.5) / 2;
+        break;
+      default:
+        mesh = MeshBuilder.CreateBox('piece', { size }, this.scene);
+        mesh.position.y = size / 2;
+    }
+
+    mesh.material = this.getFallbackMaterial(color);
+    mesh.receiveShadows = true;
+    return mesh;
+  }
+
+  private getFallbackMaterial(color: PieceColor): PBRMaterial {
+    if (color === 'w') {
+      if (!this.matFallback_w) {
+        this.matFallback_w = new PBRMaterial('pieceMat_w', this.scene);
+        this.matFallback_w.albedoColor = new Color3(0.95, 0.95, 1.0);
+        this.matFallback_w.emissiveColor = new Color3(0.1, 0.1, 0.2);
+        this.matFallback_w.metallic = 0.8;
+        this.matFallback_w.roughness = 0.2;
+      }
+      return this.matFallback_w;
+    } else {
+      if (!this.matFallback_b) {
+        this.matFallback_b = new PBRMaterial('pieceMat_b', this.scene);
+        this.matFallback_b.albedoColor = new Color3(0.15, 0.02, 0.02);
+        this.matFallback_b.emissiveColor = new Color3(0.05, 0, 0);
+        this.matFallback_b.metallic = 0.6;
+        this.matFallback_b.roughness = 0.4;
+      }
+      return this.matFallback_b;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // MOVEMENT & CAPTURE
+  // ---------------------------------------------------------------------------
+
+  public getBoardPosition(row: number, col: number): Vector3 {
+    return new Vector3(col - 3.5, 0.1, row - 3.5);
+  }
+
+  public async movePiece(id: string, toRow: number, toCol: number) {
+    const piece = this.pieces.get(id);
+    if (!piece) {
+      console.error(`Move failed: Piece '${id}' not found.`);
+      return;
+    }
+
+    const targetPos = this.getBoardPosition(toRow, toCol);
+
+    const animation = new Animation(
+      'moveAnim', 'position', 60,
+      Animation.ANIMATIONTYPE_VECTOR3,
+      Animation.ANIMATIONLOOPMODE_CONSTANT
+    );
+
+    animation.setKeys([
+      { frame: 0, value: piece.position.clone() },
+      { frame: 45, value: targetPos }
+    ]);
+
+    const easing = new QuadraticEase();
+    easing.setEasingMode(EasingFunction.EASINGMODE_EASEINOUT);
+    animation.setEasingFunction(easing);
+
+    piece.animations = [animation];
+    await this.scene.beginAnimation(piece, 0, 45, false).waitAsync();
+
+    const oldSquare = piece.metadata.squareName;
+    const newSquare = this.getSquareName(toRow, toCol);
+    this.piecesBySquare.delete(oldSquare);
+    piece.metadata.row = toRow;
+    piece.metadata.col = toCol;
+    piece.metadata.squareName = newSquare;
+    this.piecesBySquare.set(newSquare, piece);
+  }
+
+  public getPieceAt(squareName: string): AbstractMesh | null {
+    return this.piecesBySquare.get(squareName) || null;
+  }
+
+  public async capturePiece(id: string) {
+    const piece = this.pieces.get(id);
+    if (!piece) return;
+
+    // Shrink & disappear
+    const anim = new Animation('capture', 'scaling', 60, Animation.ANIMATIONTYPE_VECTOR3);
+    anim.setKeys([
+      { frame: 0, value: piece.scaling.clone() },
+      { frame: 20, value: Vector3.Zero() }
+    ]);
+    piece.animations = [anim];
+    await this.scene.beginAnimation(piece, 0, 20, false).waitAsync();
+
+    this.disposePiece(piece);
+  }
+
+  /** Placeholder for future attack animations */
+  public playAttackAnimation(_id: string) {
+    // No animations in the static piece models; can be extended later
+  }
+
+  // ---------------------------------------------------------------------------
+  // SELECTION HIGHLIGHT
+  // ---------------------------------------------------------------------------
+
+  public highlightPiece(id: string) {
+    const piece = this.pieces.get(id);
+    if (!piece) return;
+
+    if (!this.selectionRing) {
+      this.selectionRing = MeshBuilder.CreateTorus('selectionRing', {
+        diameter: 0.85,
+        thickness: 0.05,
+        tessellation: 32
+      }, this.scene);
+
+      const mat = new PBRMaterial('selectionRingMat', this.scene);
+      mat.emissiveColor = new Color3(0, 0.8, 1);
+      mat.albedoColor = new Color3(0, 0.4, 0.6);
+      mat.transparencyMode = PBRMaterial.PBRMETHOD_BLEND;
+      mat.alpha = 0.6;
+      this.selectionRing.material = mat;
+    }
+
+    this.selectionRing.isVisible = true;
+    this.selectionRing.position = piece.position.clone();
+    this.selectionRing.position.y = 0.12;
+  }
+
+  public clearSelection() {
+    if (this.selectionRing) {
+      this.selectionRing.isVisible = false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // UTILITIES
+  // ---------------------------------------------------------------------------
+
+  private getSquareName(row: number, col: number): string {
+    const files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+    return `${files[col]}${row + 1}`;
+  }
+}
