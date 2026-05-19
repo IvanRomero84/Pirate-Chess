@@ -123,7 +123,13 @@ export class PieceRenderer {
 
   private disposePiece(mesh: AbstractMesh) {
     this.pieces.delete(mesh.metadata?.id);
-    this.piecesBySquare.delete(mesh.metadata?.squareName);
+    // Only evict from piecesBySquare if this mesh is still the current occupant.
+    // If the attacker already moved here first, piecesBySquare[squareName] === attacker,
+    // not this mesh, so we must NOT delete it (that would cause a ghost duplicate).
+    const sq = mesh.metadata?.squareName as string | undefined;
+    if (sq && this.piecesBySquare.get(sq) === mesh) {
+      this.piecesBySquare.delete(sq);
+    }
     mesh.dispose(false, false); // don't dispose shared materials
   }
 
@@ -176,8 +182,8 @@ export class PieceRenderer {
         // Tony Tony Chopper - 90 cm cute doctor pawn!
         targetHeight = 0.45;
       } else if (type === 'r') {
-        // Franky - 240 cm towering cyborg!
-        targetHeight = 0.85;
+        // Jinbei - 301 cm massive fishman helmsman!
+        targetHeight = 0.96;
       } else if (type === 'n') {
         // Sanji - 180 cm master chef!
         targetHeight = 0.71;
@@ -197,20 +203,20 @@ export class PieceRenderer {
         // Marine Soldier pawn
         targetHeight = 0.65;
       } else if (type === 'r') {
-        // Monkey D. Garp - 287 cm legendary marine hero!
-        targetHeight = 0.92;
+        // Fujitora (Issho) - 270 cm blind Admiral!
+        targetHeight = 0.90;
       } else if (type === 'n') {
         // Borsalino (Kizaru) - 302 cm tall Admiral!
         targetHeight = 0.96;
       } else if (type === 'b') {
-        // Captain Koby - 167 cm brave marine hero!
-        targetHeight = 0.66;
+        // Sakazuki (Akainu) - 306 cm Fleet Admiral, the most imposing marine!
+        targetHeight = 0.98;
       } else if (type === 'q') {
         // Kuzan (Aokiji) - 298 cm tall Admiral!
         targetHeight = 0.95;
       } else if (type === 'k') {
-        // Sakazuki (Akainu) - 306 cm tall Fleet Admiral!
-        targetHeight = 0.98;
+        // Sengoku - 279 cm former Fleet Admiral, Buddha form!
+        targetHeight = 0.91;
       }
     }
 
@@ -376,6 +382,15 @@ export class PieceRenderer {
     const piece = this.pieces.get(id);
     if (!piece) return;
 
+    const hasAnimations = piece.metadata?.animationGroups && piece.metadata.animationGroups.length > 0;
+
+    if (hasAnimations) {
+      // Play death animation, then fade out via scaling
+      this.playDeathAnimation(piece);
+      // Wait for the death anim to play for 1.2s then shrink & dispose
+      await new Promise(resolve => setTimeout(resolve, 1200));
+    }
+
     // Shrink & disappear
     const anim = new Animation('capture', 'scaling', 60, Animation.ANIMATIONTYPE_VECTOR3);
     anim.setKeys([
@@ -388,9 +403,21 @@ export class PieceRenderer {
     this.disposePiece(piece);
   }
 
-  /** Placeholder for future attack animations */
-  public playAttackAnimation(_id: string) {
-    // No animations in the static piece models; can be extended later
+  /** Play attack animation on the attacker piece (if it has skeleton animations) */
+  public playAttackAnimation(id: string) {
+    const piece = this.pieces.get(id);
+    if (!piece) return;
+    const hasAnimations = piece.metadata?.animationGroups && piece.metadata.animationGroups.length > 0;
+    if (hasAnimations) {
+      this.playAttackSkeletalAnimation(piece);
+    }
+  }
+
+  /** Return a piece to its idle standing animation after attacking */
+  public returnToIdle(id: string) {
+    const piece = this.pieces.get(id);
+    if (!piece) return;
+    this.playIdleAnimation(piece);
   }
 
   // ---------------------------------------------------------------------------
@@ -431,70 +458,81 @@ export class PieceRenderer {
   // ANIMATION HELPERS
   // ---------------------------------------------------------------------------
 
+  // Map of piece key -> animation codes for specific Fighting Path characters
+  // Keys match `${type}_${color}` format.
+  private static readonly ANIM_MAP: Record<string, { idle: string; walk: string; attack: string; death: string }> = {
+    // ── Straw Hat Pirates (White side) ───────────────────────────────────────────
+    // Monkey D. Luffy (king white)   — monkey_d_luffy.glb (Bounty Rush, 30 Luffy + 30 Nami)
+    'k_w': { idle: 'pl_luffy_topw01_idle_a',  walk: 'pl_luffy_topw01_run',  attack: 'pl_luffy_topw01_combo_a', death: 'pl_luffy_topw01_down' },
+    // Nami (queen white)             — one_piece_nami.glb (Bounty Rush, 30 Nami)
+    'q_w': { idle: 'pl_nami_2yaf01_idle_a',   walk: 'pl_nami_2yaf01_run',   attack: 'pl_nami_2yaf01_combo_a',  death: 'pl_nami_2yaf01_down' },
+    // Roronoa Zoro (bishop white)    — zoro_-_one_piece.glb (Fighting Path, 86 anims)
+    'b_w': { idle: '0011_Low',                walk: '0110_Low',              attack: '3001_Low',                death: '6011_Low' },
+    // Sanji (knight white)           — one_piece_sanji.glb (Bounty Rush, 30 Sanji + 30 Luffy + 30 Nami)
+    'n_w': { idle: 'pl_sanji_atta01_idle_a',  walk: 'pl_sanji_atta01_run',  attack: 'pl_sanji_atta01_combo_a', death: 'pl_sanji_atta01_down' },
+    // ── Marines / World Government (Black side) ──────────────────────────────────
+    // Captain Koby (bishop black)    — one_piece_fighting_path_koby.glb (Fighting Path)
+    'b_b': { idle: '0011',                    walk: '0110',                  attack: '0321',                    death: '6011' },
+  };
+
+  private getAnimationForPiece(piece: AbstractMesh, role: 'idle' | 'walk' | 'attack' | 'death'): AnimationGroup | undefined {
+    const ags = piece.metadata?.animationGroups as AnimationGroup[];
+    if (!ags || ags.length === 0) return undefined;
+
+    const key = `${piece.metadata?.type}_${piece.metadata?.color}`;
+    const map = PieceRenderer.ANIM_MAP[key];
+
+    // 1. Try exact-match from the map
+    if (map) {
+      const code = map[role];
+      const exact = ags.find(ag => ag.name === code || ag.name.startsWith(code));
+      if (exact) return exact;
+    }
+
+    // 2. Fall back to keyword matching
+    const keywords: Record<string, string[]> = {
+      idle:   ['idle', 'wait', 'stand', 'pose', 'default'],
+      walk:   ['walk', 'run', 'move', 'jog', '0110', '0021'],
+      attack: ['attack', 'combo', 'slash', 'hit', '3001', '1011', '0321'],
+      death:  ['death', 'die', 'down', 'dead', 'fall', '6011'],
+    };
+    const found = ags.find(ag => keywords[role].some(kw => ag.name.toLowerCase().includes(kw)));
+    if (found) return found;
+
+    // 3. Last resort: first animation
+    return ags[0];
+  }
+
   private playIdleAnimation(piece: AbstractMesh) {
     const ags = piece.metadata?.animationGroups as AnimationGroup[];
     if (!ags || ags.length === 0) return;
-
-    // Stop all other running animations
     ags.forEach(ag => ag.stop());
-
-    const type = piece.metadata?.type;
-    const color = piece.metadata?.color;
-    let idleAg: AnimationGroup | undefined;
-
-    if (type === 'b' && color === 'b') {
-      // Captain Koby - Fighting Path ID '0011' is his resting idle stance
-      idleAg = ags.find(ag => ag.name.includes('0011'));
-    }
-
-    if (!idleAg) {
-      // Look for standard idle/stance/wait animations
-      idleAg = ags.find(ag => {
-        const name = ag.name.toLowerCase();
-        return name.includes('idle') || name.includes('wait') || name.includes('stand') || name.includes('pose') || name.includes('default');
-      });
-    }
-
-    if (!idleAg) {
-      idleAg = ags[0];
-    }
-
-    if (idleAg) {
-      idleAg.start(true);
-    }
+    const ag = this.getAnimationForPiece(piece, 'idle');
+    if (ag) ag.start(true);
   }
 
   private playWalkAnimation(piece: AbstractMesh) {
     const ags = piece.metadata?.animationGroups as AnimationGroup[];
     if (!ags || ags.length === 0) return;
-
-    // Stop all other running animations
     ags.forEach(ag => ag.stop());
+    const ag = this.getAnimationForPiece(piece, 'walk');
+    if (ag) ag.start(true);
+  }
 
-    const type = piece.metadata?.type;
-    const color = piece.metadata?.color;
-    let walkAg: AnimationGroup | undefined;
+  private playAttackSkeletalAnimation(piece: AbstractMesh) {
+    const ags = piece.metadata?.animationGroups as AnimationGroup[];
+    if (!ags || ags.length === 0) return;
+    ags.forEach(ag => ag.stop());
+    const ag = this.getAnimationForPiece(piece, 'attack');
+    if (ag) ag.start(false); // play once — attacker snaps back to idle after
+  }
 
-    if (type === 'b' && color === 'b') {
-      // Captain Koby - Fighting Path ID '0110' is his standard running animation
-      walkAg = ags.find(ag => ag.name.includes('0110') || ag.name.includes('0021'));
-    }
-
-    if (!walkAg) {
-      // Look for walking/running/moving animations
-      walkAg = ags.find(ag => {
-        const name = ag.name.toLowerCase();
-        return name.includes('walk') || name.includes('run') || name.includes('move') || name.includes('jog');
-      });
-    }
-
-    if (!walkAg) {
-      walkAg = ags[0];
-    }
-
-    if (walkAg) {
-      walkAg.start(true);
-    }
+  private playDeathAnimation(piece: AbstractMesh) {
+    const ags = piece.metadata?.animationGroups as AnimationGroup[];
+    if (!ags || ags.length === 0) return;
+    ags.forEach(ag => ag.stop());
+    const ag = this.getAnimationForPiece(piece, 'death');
+    if (ag) ag.start(false); // play once
   }
 
   private getSquareName(row: number, col: number): string {

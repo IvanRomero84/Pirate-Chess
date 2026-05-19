@@ -15,20 +15,20 @@ export interface LoadedModel {
 // URLs for each piece type and color (One Piece Theme!)
 const PIECE_MODELS: Record<string, string> = {
   // Straw Hat Pirates (White side)
-  'p_w': '/models/tony_chopper.glb',                    // Pawn: Tony Tony Chopper
-  'r_w': '/models/franky.glb',                          // Rook: Franky
-  'n_w': '/models/one_piece_sanji.glb',                 // Knight: Sanji
-  'b_w': '/models/zoro_-_one_piece.glb',                // Bishop: Roronoa Zoro
-  'q_w': '/models/one_piece_nami.glb',                  // Queen: Nami
-  'k_w': '/models/monkey_d_luffy.glb',                  // King: Monkey D. Luffy
+  'p_w': '/models/one_piece_general_franky.glb',           // Pawn: General Franky
+  'r_w': '/models/one_piece_jimbei.glb',                   // Rook: Jinbei
+  'n_w': '/models/one_piece_sanji.glb',                    // Knight: Sanji
+  'b_w': '/models/zoro_-_one_piece.glb',                   // Bishop: Roronoa Zoro
+  'q_w': '/models/one_piece_nami.glb',                     // Queen: Nami
+  'k_w': '/models/monkey_d_luffy.glb',                     // King: Monkey D. Luffy
 
   // Marines / Navy (Black side)
   'p_b': '/models/one_piece_bounty_rush_marine__mullet.glb', // Pawn: Marine Soldier
-  'r_b': '/models/monkey_d_garp.glb',                        // Rook: Monkey D. Garp
+  'r_b': '/models/one_piece_fujitora.glb',                  // Rook: Fujitora
   'n_b': '/models/one_piece_borsalino.glb',                  // Knight: Borsalino (Kizaru)
-  'b_b': '/models/one_piece_fighting_path_koby.glb',         // Bishop: Captain Koby
-  'q_b': '/models/one_piece_kuzan.glb',                      // Queen: Kuzan (Aokiji)
-  'k_b': '/models/one_piece_sakazuki.glb',                   // King: Sakazuki (Akainu)
+  'b_b': '/models/one_piece_kuzan.glb',                     // Bishop: Kuzan (Aokiji)
+  'q_b': '/models/one_piece_sakazuki.glb',                  // Queen: Sakazuki (Akainu)
+  'k_b': '/models/one_piece_sengoku.glb',                   // King: Sengoku
 };
 
 export class AssetManager {

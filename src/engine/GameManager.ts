@@ -145,21 +145,40 @@ export class GameManager {
     if (!attacker || !target) return;
 
     const targetPos = target.position.clone();
+    const toSquare = this.parseSquare(to);
+    const isRangedAttacker = attacker.metadata?.type === 'p' && attacker.metadata?.color === 'b';
 
     this.engine.focusCameraOn(targetPos);
-    this.pieces.playAttackAnimation(attacker.name);
 
-    await new Promise(resolve => setTimeout(resolve, 800));
+    if (isRangedAttacker) {
+      // ── Ranged attack (Marine Pawn with rifle): attack from current position ──
+      this.pieces.playAttackAnimation(attacker.name);
+      await new Promise(resolve => setTimeout(resolve, 800));
+      this.effects.createMagicExplosion(targetPos);
+      this.sounds.playSound('capture');
+      await this.pieces.capturePiece(target.name);
+      // Now walk to the captured square
+      await this.pieces.movePiece(attacker.name, toSquare.row, toSquare.col);
+    } else {
+      // ── Melee attack: walk to target square first, then attack ──
+      // Step 1: move to the captured square (this also updates piecesBySquare to 'to')
+      await this.pieces.movePiece(attacker.name, toSquare.row, toSquare.col);
 
-    this.effects.createMagicExplosion(targetPos);
-    this.sounds.playSound('capture');
+      // Step 2: play attack animation on the now-disposed-but-still-visible target
+      this.pieces.playAttackAnimation(attacker.name);
+      await new Promise(resolve => setTimeout(resolve, 600));
 
-    await this.pieces.capturePiece(target.name);
+      // Step 3: explosion + death on the captured piece
+      this.effects.createMagicExplosion(targetPos);
+      this.sounds.playSound('capture');
+      await this.pieces.capturePiece(target.name);
 
-    const toSquare = this.parseSquare(to);
-    await this.pieces.movePiece(attacker.name, toSquare.row, toSquare.col);
+      // Step 4: snap back to idle
+      const attackerMesh = this.findPieceMeshAt(to);
+      if (attackerMesh) this.pieces.returnToIdle(attackerMesh.name);
+    }
 
-    await new Promise(resolve => setTimeout(resolve, 800));
+    await new Promise(resolve => setTimeout(resolve, 400));
   }
 
   public syncBoard() {
