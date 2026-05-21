@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/authStore';
 import { useMultiplayerStore } from '../stores/multiplayerStore';
@@ -28,7 +28,29 @@ const selectSide = (side: 'w' | 'b') => {
   showSideSelection.value = false;
   router.push('/game');
 };
+
+const userBounty = computed(() => {
+  if (!authStore.user) return '0';
+  const uid = authStore.user.uid || '';
+  let hash = 0;
+  for (let i = 0; i < uid.length; i++) {
+    hash = uid.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const rawBounty = Math.abs(hash) % 470000000 + 30000000; // Between 30M and 500M
+  return rawBounty.toLocaleString('es-ES');
+});
+
+const userRank = computed(() => {
+  if (!authStore.user) return '';
+  const email = authStore.user.email || '';
+  if (email.includes('admin')) return 'Almirante de la Flota';
+  const uid = authStore.user.uid || '';
+  const index = uid.charCodeAt(0) % 4;
+  const ranks = ['Supernova', 'Capitán de la Flota', 'Vicealmirante', 'Cazador de Piratas'];
+  return ranks[index];
+});
 </script>
+
 
 <template>
   <div class="main-menu">
@@ -38,12 +60,37 @@ const selectSide = (side: 'w' | 'b') => {
         <h2 class="sub-title">Grand Line Chess</h2>
       </div>
 
-      <div class="auth-status" v-if="authStore.user">
-        <p>Welcome, <span class="username">{{ authStore.user.displayName || 'Pirate' }}</span></p>
-        <button @click="authStore.logout" class="btn-logout">Leave Grand Line</button>
+      <!-- Premium Crew Member / Auth Card -->
+      <div class="profile-card" v-if="authStore.user">
+        <div class="profile-header">
+          <div class="avatar-frame">
+            <img 
+              v-if="authStore.user.photoURL" 
+              :src="authStore.user.photoURL" 
+              class="avatar-img"
+              alt="Pirate Avatar"
+            />
+            <div v-else class="avatar-placeholder">
+              <span class="avatar-initial">{{ (authStore.user.displayName || 'P').charAt(0).toUpperCase() }}</span>
+            </div>
+            <div class="gold-ring"></div>
+          </div>
+          <div class="profile-info">
+            <div class="rank-badge">{{ userRank }}</div>
+            <h3 class="profile-name">{{ authStore.user.displayName || 'Pirata Anónimo' }}</h3>
+            <p class="profile-bounty">Recompensa: <span>{{ userBounty }} ฿</span></p>
+          </div>
+        </div>
+        <button @click="authStore.logout" class="btn-logout-premium">
+          <span class="btn-logout-icon">⚓</span> Abandonar la Grand Line
+        </button>
       </div>
-      <div class="auth-status" v-else>
-        <button @click="authStore.loginWithGoogle" class="btn-login">Join the Crew</button>
+      
+      <div class="lobby-auth-prompt" v-else>
+        <p class="prompt-text">¿Quieres cruzar el Nuevo Mundo?</p>
+        <button @click="router.push('/login')" class="btn-login-premium">
+          <span class="btn-login-icon">☠️</span> UNIRSE A LA TRIPULACIÓN
+        </button>
       </div>
 
       <div class="menu-actions">
@@ -195,32 +242,200 @@ const selectSide = (side: 'w' | 'b') => {
   opacity: 0.4;
 }
 
-.auth-status {
+/* Premium profile card styling */
+.profile-card {
   margin-top: 2rem;
-  padding: 1rem;
-  border-top: 1px solid rgba(212, 175, 55, 0.2);
+  padding: 1.5rem;
+  background: rgba(4, 12, 22, 0.5);
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5),
+              0 0 15px rgba(212, 175, 55, 0.05);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  transition: all 0.3s ease;
 }
 
-.username {
+.profile-card:hover {
+  border-color: rgba(212, 175, 55, 0.6);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6),
+              0 0 20px rgba(212, 175, 55, 0.15);
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  width: 100%;
+  text-align: left;
+}
+
+.avatar-frame {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(135deg, #ffe699 0%, #d4af37 50%, #8a6d1c 100%);
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.3);
+}
+
+.avatar-img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #040c16;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: radial-gradient(circle, #0b1d33 0%, #030a14 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #040c16;
+}
+
+.avatar-initial {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #d4af37;
+  font-family: 'Cinzel', serif;
+  text-shadow: 0 0 5px rgba(212, 175, 55, 0.5);
+}
+
+.gold-ring {
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border-radius: 50%;
+  border: 1px solid rgba(212, 175, 55, 0.5);
+  pointer-events: none;
+  animation: rotateGlow 8s linear infinite;
+}
+
+@keyframes rotateGlow {
+  0% { transform: rotate(0deg); opacity: 0.5; }
+  50% { opacity: 0.8; }
+  100% { transform: rotate(360deg); opacity: 0.5; }
+}
+
+.profile-info {
+  flex: 1;
+}
+
+.rank-badge {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #fff;
+  background: rgba(212, 175, 55, 0.2);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-block;
+  font-weight: bold;
+  margin-bottom: 0.35rem;
+}
+
+.profile-name {
+  font-size: 1.25rem;
+  margin: 0 0 0.2rem;
+  color: #fff;
+  font-weight: 700;
+  font-family: 'Cinzel', serif;
+}
+
+.profile-bounty {
+  font-size: 0.8rem;
+  color: #a0aec0;
+  margin: 0;
+}
+
+.profile-bounty span {
   color: #d4af37;
   font-weight: bold;
 }
 
-.btn-login, .btn-logout {
+.btn-logout-premium {
+  width: 100%;
   background: transparent;
-  border: 1px solid #d4af37;
+  border: 1px solid rgba(212, 175, 55, 0.4);
   color: #d4af37;
-  padding: 0.5rem 1.5rem;
-  margin-top: 10px;
-  cursor: pointer;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.85rem;
   font-family: 'Cinzel', serif;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 6px;
   transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
 }
 
-.btn-login:hover, .btn-logout:hover {
-  background: #d4af37;
-  color: #000;
+.btn-logout-premium:hover {
+  background: rgba(212, 175, 55, 0.1);
+  border-color: #d4af37;
+  box-shadow: 0 0 10px rgba(212, 175, 55, 0.15);
 }
+
+.btn-logout-icon {
+  font-size: 1rem;
+}
+
+/* Prompt styles */
+.lobby-auth-prompt {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border-top: 1px solid rgba(212, 175, 55, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.prompt-text {
+  font-size: 0.9rem;
+  color: #a0aec0;
+  margin: 0;
+}
+
+.btn-login-premium {
+  background: linear-gradient(to right, #8a6d1c 0%, #d4af37 50%, #8a6d1c 100%);
+  background-size: 200% auto;
+  border: 1px solid #d4af37;
+  border-radius: 8px;
+  padding: 0.75rem 2rem;
+  color: #040c16;
+  font-size: 1rem;
+  font-weight: bold;
+  font-family: 'Cinzel', serif;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3),
+              0 0 10px rgba(212, 175, 55, 0.2);
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.btn-login-premium:hover {
+  background-position: right center;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4),
+              0 0 18px rgba(212, 175, 55, 0.4);
+  transform: translateY(-1px);
+}
+
 
 @media (max-width: 600px) {
   .game-title { font-size: 2.5rem; letter-spacing: 4px; }

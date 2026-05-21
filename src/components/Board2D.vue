@@ -12,7 +12,8 @@
               { 
                 'selected': isSelected(getSquareName(r, c)),
                 'has-valid-move': getValidMove(getSquareName(r, c)),
-                'has-capture-move': getValidMove(getSquareName(r, c))?.captured
+                'has-capture-move': getValidMove(getSquareName(r, c))?.captured,
+                'top-row-grid': r === rows[0]
               }
             ]"
             @click="handleSquareClick(getSquareName(r, c))"
@@ -32,7 +33,13 @@
               :class="[getPieceAt(r, c)?.color]"
               :style="{ boxShadow: getGlowShadow(getPieceAt(r, c)?.type || '', getPieceAt(r, c)?.color || '') }"
             >
-              <div class="piece-icon-wrapper" v-html="getPieceSvg(getPieceAt(r, c)?.type || '')"></div>
+              <div class="piece-portrait-wrapper">
+                <img 
+                  :src="getPieceImage(getPieceAt(r, c)?.type || '', getPieceAt(r, c)?.color || '')" 
+                  class="piece-portrait" 
+                  :alt="getPieceCharacterName(getPieceAt(r, c)?.type || '', getPieceAt(r, c)?.color || '')" 
+                />
+              </div>
               <span class="character-name">{{ getPieceCharacterName(getPieceAt(r, c)?.type || '', getPieceAt(r, c)?.color || '') }}</span>
             </div>
 
@@ -118,18 +125,27 @@ const shouldShowRowLabel = (r: number, c: number) => {
   return c === 0; // File 'a' (raw col 0) is on the left normally
 };
 
-// Standard highly detailed, clean minimalist SVGs
-const SVG_ICONS: Record<string, string> = {
-  p: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="7" r="3.25"/><path d="M12 11c-2.8 0-4 2.8-4 5.5h8c0-2.7-1.2-5.5-4-5.5zm-5 7h10v1.5H7V18z" stroke="currentColor" stroke-width="0.5"/></svg>`,
-  r: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 4v3h1.5V5.5h3v2h3v-2h3v2h3v-2h1.5V4H5zm2 4.5h10V10H7V8.5zm1 3c-1.2 0-2 2-2 4h12c0-2-.8-4-2-4H8zm-1.5 5.5h11v2h-11v-2z" stroke="currentColor" stroke-width="0.5"/></svg>`,
-  n: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M19.5 11c-1.2-2.3-3.2-3.3-5-3.8.3-.7-.2-2.2-2.5-2.2-4 0-5.5 3.5-5.5 6.5 0 2.2 1.2 4.2 3 4.8V15c.5.5 1.5 1 2.5.5h-1c1-.8 2-1.8 2.5-3.2.3-1 .5-2 0-3.2.8.2 1.2.8 1.2 1.5 0 .8-.5 1.5-1 2.2-.2.3.2.8.8.5 1-1 1.8-2.2 1.5-3.8zM12 8.5c.4 0 .7.3.7.7s-.3.7-.7.7-.7-.3-.7-.7.3-.7.7-.7z" stroke="currentColor" stroke-width="0.5"/></svg>`,
-  b: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="4.5" r="1.25"/><path d="M12 6.5c-2.2 0-3.5 2.2-3.5 5.2 0 1.8.8 3.2 1.8 4.2h3.4c1-1 1.8-2.4 1.8-4.2 0-3-1.3-5.2-3.5-5.2zm-2.5 11h5v1.8h-5v-1.8z" stroke="currentColor" stroke-width="0.5"/></svg>`,
-  q: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="3.5" r="1"/><path d="M5.5 7.5l2.5 4.5 4-6 4 6 2.5-4.5v2c0 1.8-1.8 3.5-4.5 3.5h-5C6.8 13 5.5 11.3 5.5 9.5v-2zm1.5 8h10v1.8H7v-1.8z" stroke="currentColor" stroke-width="0.5"/></svg>`,
-  k: `<svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M11 2h2v1.5h1.5v2H13V7h-2V5.5H9.5v-2H11V2zm-5.5 6l2.5 2.5 4-3.5 4 3.5 2.5-2.5v2.5c0 1.8-1.3 3.5-4 3.5H9.5c-2.7 0-4-1.7-4-3.5V8zm1.5 8h10v1.8H7v-1.8z" stroke="currentColor" stroke-width="0.5"/></svg>`
-};
-
-const getPieceSvg = (type: string) => {
-  return SVG_ICONS[type] || '';
+// Custom dynamic 2D graphic portraits helper
+const getPieceImage = (type: string, color: string): string => {
+  const images: Record<string, Record<string, string>> = {
+    w: {
+      k: '/Luffy_2d.webp',
+      q: '/Nami_2d.webp',
+      b: '/Roronoa_Zoro_2d.webp',
+      n: '/Sanji_2d.webp',
+      r: '/Jinbe_2d.webp',
+      p: '/Piratas_de_Sombrero_de_Paja_bandera.webp'
+    },
+    b: {
+      k: '/Sengoku_2d.webp',
+      q: '/Sakazuki_2d.webp',
+      b: '/Kuzan_2d.webp',
+      n: '/Borsalino_2d.webp',
+      r: '/Fujitora_2d.webp',
+      p: '/Marine_bandera.webp'
+    }
+  };
+  return images[color]?.[type] || '';
 };
 
 // Canon character naming matching PieceRenderer.ts and AssetManager.ts
@@ -259,22 +275,26 @@ const getGlowShadow = (type: string, color: string) => {
 
 /* Move dots and target rings */
 .move-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 16px;
   height: 16px;
   background: rgba(46, 213, 115, 0.8);
   border-radius: 50%;
   pointer-events: none;
   box-shadow: 0 0 8px rgba(46, 213, 115, 0.6);
-  z-index: 1;
+  z-index: 4; /* Rendered on top of the piece token (z-index 3) so that capture rings overlay/surround perfectly */
 }
 
 .square.has-capture-move .move-indicator {
-  width: 90%;
-  height: 90%;
+  width: 86%;
+  height: 86%;
   background: transparent;
-  border: 3px solid rgba(255, 71, 87, 0.9);
+  border: 3.5px solid rgba(255, 71, 87, 0.9);
   border-radius: 50%;
-  box-shadow: 0 0 10px rgba(255, 71, 87, 0.6), inset 0 0 5px rgba(255, 71, 87, 0.3);
+  box-shadow: 0 0 12px rgba(255, 71, 87, 0.7), inset 0 0 6px rgba(255, 71, 87, 0.4);
 }
 
 /* Coordinate labels styled small and gold */
@@ -333,51 +353,116 @@ const getGlowShadow = (type: string, color: string) => {
   color: #ffffff;
 }
 
-.piece-icon-wrapper {
-  width: 50%;
-  height: 50%;
+.piece-portrait-wrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
+  background: transparent;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  z-index: 1;
 }
 
-.piece-icon-wrapper :deep(svg) {
+.piece-portrait {
   width: 100%;
   height: 100%;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.3));
+  object-fit: cover;
+  transition: transform 0.3s ease;
 }
 
-.piece-token.w .piece-icon-wrapper :deep(svg) {
-  color: #2c1d0a;
+.piece-token:hover .piece-portrait {
+  transform: scale(1.15);
 }
 
-.piece-token.b .piece-icon-wrapper :deep(svg) {
-  color: #ffffff;
-  filter: drop-shadow(0 0 6px rgba(255,255,255,0.4));
-}
-
-/* Beautiful micro label for character names */
+/* Beautiful micro label for character names, overlaid premiumly as a tooltip */
 .character-name {
+  position: absolute;
+  bottom: 110%; /* Float elegantly above the piece coin */
+  left: 50%;
+  transform: translateX(-50%) translateY(5px);
+  opacity: 0;
+  pointer-events: none;
   font-family: 'Cinzel', serif;
-  font-size: 0.5rem;
+  font-size: 0.52rem;
   letter-spacing: 0.5px;
-  margin-top: 1px;
-  font-weight: 800;
+  font-weight: 900;
   text-transform: uppercase;
-  max-width: 90%;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  max-width: 140%;
   white-space: nowrap;
-  opacity: 0.85;
+  z-index: 10;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6), 0 0 10px rgba(212, 175, 55, 0.2);
+  border-radius: 4px;
+  padding: 3px 8px;
+  text-align: center;
+  transition: all 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+/* Tooltip arrow under the tooltip box */
+.character-name::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 4px;
+  border-style: solid;
+}
+
+.piece-token.w .character-name::after {
+  border-color: rgba(212, 175, 55, 0.8) transparent transparent transparent;
+}
+
+.piece-token.b .character-name::after {
+  border-color: rgba(255, 255, 255, 0.3) transparent transparent transparent;
 }
 
 .piece-token.w .character-name {
-  color: #4a3617;
+  color: #ffd700; /* Gold text */
+  background: rgba(10, 15, 25, 0.95); /* Dark background to pop over light portraits */
+  border: 1px solid rgba(212, 175, 55, 0.8);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
 }
 
 .piece-token.b .character-name {
-  color: #d4af37;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+  color: #ffffff; /* White text */
+  background: rgba(5, 10, 20, 0.95); /* Deep dark background */
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+}
+
+/* Render below for top row to prevent board clipping */
+.top-row-grid .piece-token .character-name {
+  bottom: auto;
+  top: 110%;
+  transform: translateX(-50%) translateY(-5px);
+}
+
+.top-row-grid .piece-token .character-name::after {
+  top: auto;
+  bottom: 100%;
+  border-color: transparent transparent rgba(212, 175, 55, 0.8) transparent;
+}
+
+.top-row-grid .piece-token.b .character-name::after {
+  border-color: transparent transparent rgba(255, 255, 255, 0.3) transparent;
+}
+
+/* Trigger visibility on Hover (Desktop) or when Selected (Mobile & Desktop) */
+.piece-token:hover .character-name,
+.square.selected .piece-token .character-name {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.top-row-grid .piece-token:hover .character-name,
+.top-row-grid.selected .piece-token .character-name {
+  transform: translateX(-50%) translateY(0);
 }
 
 /* Responsiveness overrides */
@@ -386,9 +471,32 @@ const getGlowShadow = (type: string, color: string) => {
     width: 82%;
     height: 82%;
   }
-  .character-name {
-    font-size: 0.45rem;
+  
+  /* On mobile/tablet, names only appear when selected, override hover triggers */
+  .piece-token:hover .character-name {
+    opacity: 0;
+    transform: translateX(-50%) translateY(5px);
+  }
+  
+  .top-row-grid .piece-token:hover .character-name {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-5px);
+  }
+
+  .square.selected .piece-token .character-name {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    font-size: 0.42rem;
     letter-spacing: 0px;
+    padding: 2px 5px;
+  }
+  
+  .top-row-grid.selected .piece-token .character-name {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    font-size: 0.42rem;
+    letter-spacing: 0px;
+    padding: 2px 5px;
   }
   .label-col, .label-row {
     font-size: 0.55rem;
