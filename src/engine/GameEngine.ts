@@ -23,6 +23,10 @@ export class GameEngine {
   private camera: ArcRotateCamera | null = null;
   private shadowGenerator: ShadowGenerator | null = null;
 
+  private renderLoopHandler = () => {
+    this.scene.render();
+  };
+
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.engine = new Engine(this.canvas, true);
@@ -32,13 +36,24 @@ export class GameEngine {
     this.setupScene();
     this.setupLights();
 
-    this.engine.runRenderLoop(() => {
-      this.scene.render();
-    });
+    this.setRenderLoopEnabled(true);
 
     window.addEventListener('resize', () => {
       this.engine.resize();
     });
+  }
+
+  public setRenderLoopEnabled(enabled: boolean) {
+    if (enabled) {
+      this.engine.stopRenderLoop();
+      this.engine.runRenderLoop(this.renderLoopHandler);
+    } else {
+      this.engine.stopRenderLoop();
+    }
+  }
+
+  public getFps(): number {
+    return this.engine.getFps();
   }
 
   private setupScene() {
@@ -53,15 +68,21 @@ export class GameEngine {
       [this.camera!]
     );
 
-    pipeline.bloomEnabled = true;
-    pipeline.bloomThreshold = 0.9;
-    pipeline.bloomWeight = 0.15;
-    // Reduced kernel: half the GPU cost, barely noticeable difference
-    pipeline.bloomKernel = 32;
+    const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent);
+    if (isMobile) {
+      pipeline.bloomEnabled = false;
+      pipeline.chromaticAberrationEnabled = false;
+    } else {
+      pipeline.bloomEnabled = true;
+      pipeline.bloomThreshold = 0.9;
+      pipeline.bloomWeight = 0.15;
+      // Reduced kernel: half the GPU cost, barely noticeable difference
+      pipeline.bloomKernel = 32;
 
-    pipeline.chromaticAberrationEnabled = true;
-    // Subtler aberration — cheaper and less distracting
-    pipeline.chromaticAberration.aberrationAmount = 0.5;
+      pipeline.chromaticAberrationEnabled = true;
+      // Subtler aberration — cheaper and less distracting
+      pipeline.chromaticAberration.aberrationAmount = 0.5;
+    }
 
     // SSAO removed: adds a full extra render pass per frame with little
     // visual benefit on a chess board. Saves ~8-15 ms/frame on mid-range GPUs.
@@ -103,7 +124,9 @@ export class GameEngine {
     dirLight.position = new Vector3(10, 20, 10);
     dirLight.intensity = 0.8;
 
-    this.shadowGenerator = new ShadowGenerator(1024, dirLight);
+    const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent);
+    const shadowMapSize = isMobile ? 512 : 1024;
+    this.shadowGenerator = new ShadowGenerator(shadowMapSize, dirLight);
     // Poisson sampling: single-pass soft shadows, much cheaper than blur exponential
     this.shadowGenerator.usePoissonSampling = true;
   }

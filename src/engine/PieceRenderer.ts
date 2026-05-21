@@ -438,7 +438,7 @@ export class PieceRenderer {
       const mat = new PBRMaterial('selectionRingMat', this.scene);
       mat.emissiveColor = new Color3(0, 0.8, 1);
       mat.albedoColor = new Color3(0, 0.4, 0.6);
-      mat.transparencyMode = PBRMaterial.PBRMETHOD_BLEND;
+      mat.transparencyMode = 2; // MATERIAL_ALPHABLEND
       mat.alpha = 0.6;
       this.selectionRing.material = mat;
     }

@@ -1,6 +1,18 @@
 <template>
   <div class="game-container">
-    <canvas ref="renderCanvas" class="render-canvas"></canvas>
+    <!-- 2D Board Overlay -->
+    <Board2D 
+      v-if="gameStore.viewMode === '2d'" 
+      :manager="(manager as any)"
+      class="board-2d-overlay"
+    />
+
+    <!-- 3D Canvas -->
+    <canvas 
+      v-show="gameStore.viewMode === '3d'" 
+      ref="renderCanvas" 
+      class="render-canvas"
+    ></canvas>
     
     <!-- UI Overlay -->
     <div class="ui-overlay">
@@ -17,7 +29,7 @@
 
         <div class="game-center">
           <h1>Grand Line</h1>
-          <div class="timer">10:00</div>
+          <div class="timer">{{ formattedTime }}</div>
         </div>
 
         <div class="player-profile right" :class="{ active: gameStore.status.turn === 'b' }">
@@ -38,34 +50,115 @@
             <div class="outcome-decoration"></div>
             <p class="outcome-subtitle">The King of the Pirates has been decided.</p>
             <div class="game-over-actions">
-              <button @click="gameStore.resetGame" class="btn-epic">New Voyage</button>
+              <button @click="handleNewVoyage" class="btn-epic">New Voyage</button>
               <button @click="handleBack" class="btn-ghost">Return to Menu</button>
             </div>
           </div>
         </div>
       </Transition>
 
-      <div class="hud-bottom">
-        <!-- Battle Chat -->
-        <div class="battle-chat">
-          <div class="messages" ref="chatScroll">
-            <div v-for="(msg, i) in multiplayerStore.messages" :key="i" class="message">
-              <span class="sender">{{ msg.senderName }}:</span>
-              <span class="text">{{ msg.text }}</span>
-            </div>
-          </div>
-          <div class="chat-input">
-            <input 
-              v-model="newMessage" 
-              @keyup.enter="sendChat" 
-              placeholder="Send message..." 
-              type="text"
-            />
-          </div>
+      <!-- Float Action Controls (2D/3D & Chat Toggle) -->
+      <div class="action-controls-bar">
+        <div class="toggle-group-premium">
+          <button 
+            class="btn-toggle-view" 
+            :class="{ active: gameStore.viewMode === '2d' }" 
+            @click="gameStore.setViewMode('2d')"
+            title="Vista 2D"
+          >
+            <Grid class="icon-ctrl" />
+            <span>2D</span>
+          </button>
+          <button 
+            class="btn-toggle-view" 
+            :class="{ active: gameStore.viewMode === '3d' }" 
+            @click="gameStore.setViewMode('3d')"
+            :disabled="!!gameStore.engineError"
+            title="Vista 3D"
+          >
+            <Rotate3d class="icon-ctrl" />
+            <span>3D</span>
+          </button>
         </div>
 
-        <button @click="handleBack" class="btn-surrender">Surrender</button>
+        <button 
+          class="btn-toggle-chat-bubble" 
+          :class="{ 'chat-open': gameStore.chatExpanded }"
+          @click="gameStore.toggleChat"
+          title="Chat de Batalla"
+        >
+          <MessageSquare v-if="gameStore.chatExpanded" class="icon-ctrl" />
+          <MessageSquareOff v-else class="icon-ctrl" />
+          <span 
+            v-if="!gameStore.chatExpanded && gameStore.unreadMessages > 0" 
+            class="unread-badge animate-pulse"
+          >
+            {{ gameStore.unreadMessages }}
+          </span>
+        </button>
       </div>
+
+      <!-- Collapsible Battle Chat Panel -->
+      <div 
+        class="battle-chat-panel" 
+        :class="{ 'expanded': gameStore.chatExpanded }"
+      >
+        <div class="chat-header">
+          <div class="chat-title">
+            <MessageSquare class="icon-chat-header" />
+            <span>Bitácora</span>
+          </div>
+          <button class="btn-close-chat" @click="gameStore.toggleChat">
+            <X class="icon-close-chat" />
+          </button>
+        </div>
+        <div class="messages" ref="chatScroll">
+          <div v-for="(msg, i) in multiplayerStore.messages" :key="i" class="message">
+            <span class="sender">{{ msg.senderName }}:</span>
+            <span class="text">{{ msg.text }}</span>
+          </div>
+        </div>
+        <div class="chat-input">
+          <input 
+            v-model="newMessage" 
+            @keyup.enter="sendChat" 
+            placeholder="Escribe un mensaje..." 
+            type="text"
+          />
+        </div>
+      </div>
+
+      <!-- General Overlay elements (Surrender) -->
+      <div class="hud-bottom">
+        <button @click="handleSurrender" class="btn-surrender">Surrender</button>
+      </div>
+
+      <!-- Low Performance Fallback Alert Dialog -->
+      <Transition name="fade">
+        <div class="fps-prompt-overlay" v-if="showFpsPrompt">
+          <div class="fps-prompt-content">
+            <AlertTriangle class="icon-alert-warning" />
+            <h3>¿Rendimiento Bajo?</h3>
+            <p>El juego está experimentando caídas de fotogramas. Para una experiencia fluida y rápida en tu dispositivo móvil, te sugerimos cambiar al modo de tablero 2D.</p>
+            <div class="fps-prompt-actions">
+              <button @click="handleFpsFallback" class="btn-epic-alert">Cambiar a 2D</button>
+              <button @click="showFpsPrompt = false" class="btn-ghost-alert">Ignorar</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- WebGL / Init Failure Banner -->
+      <Transition name="fade">
+        <div class="engine-error-alert" v-if="gameStore.engineError">
+          <AlertTriangle class="icon-alert-danger" />
+          <div class="error-msg-content">
+            <h4>Renderizado 3D Desactivado</h4>
+            <p>{{ gameStore.engineError }}</p>
+          </div>
+          <button class="btn-error-dismiss" @click="gameStore.engineError = null">Entendido</button>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>
@@ -79,6 +172,15 @@ import { ChessAI } from '../ai/ChessAI';
 import { useGameStore } from '../stores/gameStore';
 import { useMultiplayerStore } from '../stores/multiplayerStore';
 import { useStatsStore } from '../stores/statsStore';
+import { 
+  MessageSquare, 
+  MessageSquareOff, 
+  Grid, 
+  Rotate3d, 
+  AlertTriangle, 
+  X 
+} from 'lucide-vue-next';
+import Board2D from '../components/Board2D.vue';
 
 const router = useRouter();
 const renderCanvas = ref<HTMLCanvasElement | null>(null);
@@ -92,13 +194,92 @@ const newMessage = ref('');
 const whiteCaptured = computed(() => []);
 const blackCaptured = computed(() => []);
 
+const showFpsPrompt = ref(false);
+let fpsInterval: any = null;
+let lowFpsCount = 0;
+
+// Timer State
+const timeLeft = ref(600); // 10 minutes in seconds
+let timerInterval: any = null;
+const timerStarted = ref(false);
+
+const formattedTime = computed(() => {
+  const m = Math.floor(timeLeft.value / 60);
+  const s = timeLeft.value % 60;
+  return `${m < 10 ? '0' + m : m}:${s < 10 ? '0' + s : s}`;
+});
+
+const startTimer = () => {
+  if (timerInterval) clearInterval(timerInterval);
+  timerStarted.value = true;
+  timerInterval = setInterval(() => {
+    if (timeLeft.value > 0) {
+      timeLeft.value--;
+    } else {
+      // Time out!
+      if (timerInterval) clearInterval(timerInterval);
+      timerInterval = null;
+      gameStore.status.isGameOver = true;
+      gameStore.status.winner = gameStore.status.turn === 'w' ? 'b' : 'w';
+    }
+  }, 1000);
+};
+
+const stopTimer = () => {
+  if (timerInterval) {
+    clearInterval(timerInterval);
+    timerInterval = null;
+  }
+};
+
+const resetTimer = () => {
+  stopTimer();
+  timerStarted.value = false;
+  timeLeft.value = 600;
+};
+
+const handleSurrender = () => {
+  if (confirm('¿Estás seguro de que quieres rendirte y regresar al East Blue?')) {
+    gameStore.status.isGameOver = true;
+    gameStore.status.winner = gameStore.playerColor === 'w' ? 'b' : 'w';
+    stopTimer();
+  }
+};
+
+const handleNewVoyage = () => {
+  gameStore.resetGame();
+  resetTimer();
+};
+
+// Watch game over to record stats & stop timer
 watch(() => gameStore.status.isGameOver, (isOver) => {
   if (isOver) {
+    stopTimer();
     if (gameStore.status.winner === gameStore.playerColor) {
       statsStore.recordWin();
     } else if (gameStore.status.winner) {
       statsStore.recordLoss();
     }
+  }
+});
+
+// Watch messages for unread notifications and auto-scroll
+watch(() => multiplayerStore.messages.length, (newVal, oldVal) => {
+  if (!gameStore.chatExpanded && newVal > oldVal) {
+    gameStore.incrementUnread();
+  }
+  
+  if (gameStore.chatExpanded) {
+    setTimeout(() => {
+      if (chatScroll.value) chatScroll.value.scrollTop = chatScroll.value.scrollHeight;
+    }, 100);
+  }
+});
+
+// Watch view mode to enable/disable rendering loop dynamically
+watch(() => gameStore.viewMode, (mode) => {
+  if (engine) {
+    engine.setRenderLoopEnabled(mode === '3d');
   }
 });
 
@@ -113,21 +294,70 @@ const sendChat = () => {
 };
 
 let engine: GameEngine | null = null;
-let manager: GameManager | null = null;
+const manager = ref<GameManager | null>(null);
+
+const startFpsMonitor = () => {
+  const isMobile = window.innerWidth < 768 || /Mobi|Android|iPhone/i.test(navigator.userAgent);
+  if (!isMobile) return;
+
+  fpsInterval = setInterval(() => {
+    if (engine && gameStore.viewMode === '3d') {
+      const fps = engine.getFps();
+      // BabylonJS engine needs a few frames to settle, ignore 0
+      if (fps > 0 && fps < 20) {
+        lowFpsCount++;
+        if (lowFpsCount >= 3) {
+          showFpsPrompt.value = true;
+          clearInterval(fpsInterval);
+        }
+      } else {
+        lowFpsCount = 0;
+      }
+    }
+  }, 1000);
+};
+
+const handleFpsFallback = () => {
+  gameStore.setViewMode('2d');
+  showFpsPrompt.value = false;
+};
 
 onMounted(() => {
-  if (renderCanvas.value) {
-    engine = new GameEngine(renderCanvas.value);
-    manager = new GameManager(engine);
+  // Mobile initial chat setup: fold chat by default to prioritize the board
+  if (window.innerWidth < 768) {
+    gameStore.chatExpanded = false;
+  }
+
+  try {
+    if (renderCanvas.value) {
+      engine = new GameEngine(renderCanvas.value);
+      manager.value = new GameManager(engine);
+      gameStore.initGame();
+      
+      // Auto-pause render loop if mode is 2D at start
+      if (gameStore.viewMode === '2d') {
+        engine.setRenderLoopEnabled(false);
+      }
+
+      setTimeout(() => manager.value?.syncBoard(), 500);
+      startFpsMonitor();
+    }
+  } catch (err) {
+    console.error('Failed to initialize 3D Engine:', err);
+    gameStore.viewMode = '2d';
+    gameStore.engineError = 'El renderizador 3D no es compatible con este dispositivo. Se ha activado el modo 2D automáticamente.';
     gameStore.initGame();
-    setTimeout(() => manager?.syncBoard(), 500);
   }
 });
 
 watch(() => gameStore.status.fen, () => {
-  manager?.syncBoard();
-});
+  manager.value?.syncBoard();
 
+  // Start timer on first move
+  if (!timerStarted.value && gameStore.game.getGameState().history.length > 0) {
+    startTimer();
+  }
+});
 
 const handleBack = () => {
   if (confirm('Are you sure you want to surrender and return to the East Blue?')) {
@@ -136,6 +366,8 @@ const handleBack = () => {
 };
 
 onUnmounted(() => {
+  if (fpsInterval) clearInterval(fpsInterval);
+  if (timerInterval) clearInterval(timerInterval);
   if (engine) engine.dispose();
 });
 </script>
@@ -146,28 +378,32 @@ onUnmounted(() => {
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background: linear-gradient(rgba(10, 24, 40, 0.4), rgba(3, 8, 14, 0.7)),
+  background: linear-gradient(rgba(10, 24, 40, 0.45), rgba(3, 8, 14, 0.75)),
               url('../public/wallpaperOnePiece.jpg');
   background-size: cover;
   background-position: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .render-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
   outline: none;
+  z-index: 1;
 }
 
-.controls-hint {
-  position: absolute;
-  top: 100px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 0.8rem;
-  color: #666;
-  text-align: center;
-  width: 100%;
-  pointer-events: none;
+.board-2d-overlay {
+  position: relative;
+  z-index: 2;
+  width: 90vmin;
+  height: 90vmin;
+  max-width: 600px;
+  max-height: 600px;
 }
 
 .ui-overlay {
@@ -182,6 +418,7 @@ onUnmounted(() => {
   color: white;
   font-family: 'Cinzel', serif;
   box-sizing: border-box;
+  z-index: 10;
 }
 
 .ui-overlay > * {
@@ -192,16 +429,16 @@ onUnmounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.9) 0%, transparent 100%);
+  background: linear-gradient(to bottom, rgba(0,0,0,0.92) 0%, transparent 100%);
   padding: 1rem 2rem;
   width: 100%;
   box-sizing: border-box;
-  z-index: 10;
-  pointer-events: none; /* Allow clicks to pass through to the 3D scene */
+  z-index: 15;
+  pointer-events: none;
 }
 
 .hud-top > * {
-  pointer-events: auto; /* Re-enable for the actual profile/title */
+  pointer-events: auto;
 }
 
 .player-profile {
@@ -209,17 +446,18 @@ onUnmounted(() => {
   align-items: center;
   gap: 1rem;
   opacity: 0.8;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.65);
   padding: 0.5rem 1.2rem;
   border-radius: 50px;
-  border: 1px solid rgba(212, 175, 55, 0.3);
-  min-width: 150px;
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  min-width: 160px;
+  backdrop-filter: blur(5px);
 }
 
 .player-profile.active {
   opacity: 1;
   border-color: #d4af37;
-  box-shadow: 0 0 20px rgba(212, 175, 55, 0.4);
+  box-shadow: 0 0 25px rgba(212, 175, 55, 0.45);
 }
 
 .portrait {
@@ -254,6 +492,222 @@ onUnmounted(() => {
   font-family: monospace;
 }
 
+/* Floating controls bar - styled to perfection */
+.action-controls-bar {
+  position: absolute;
+  top: 100px;
+  right: 2rem;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  z-index: 99;
+}
+
+.toggle-group-premium {
+  display: flex;
+  background: rgba(4, 12, 22, 0.8);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  border-radius: 30px;
+  padding: 3px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+}
+
+.btn-toggle-view {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 8px 16px;
+  font-family: 'Cinzel', serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  border-radius: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.btn-toggle-view.active {
+  background: linear-gradient(135deg, #d4af37 0%, #aa8412 100%);
+  color: #0d0800;
+  box-shadow: 0 4px 10px rgba(212, 175, 55, 0.4);
+  font-weight: bold;
+}
+
+.btn-toggle-view:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.icon-ctrl {
+  width: 16px;
+  height: 16px;
+}
+
+.btn-toggle-chat-bubble {
+  position: relative;
+  background: rgba(4, 12, 22, 0.8);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: #d4af37;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.btn-toggle-chat-bubble:hover {
+  transform: scale(1.05);
+  border-color: #d4af37;
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+}
+
+.btn-toggle-chat-bubble.chat-open {
+  background: linear-gradient(135deg, #d4af37 0%, #aa8412 100%);
+  color: #0d0800;
+  border-color: #d4af37;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.4);
+}
+
+.unread-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  background: #ff4757;
+  color: white;
+  font-size: 0.7rem;
+  font-family: sans-serif;
+  font-weight: bold;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 4px;
+  box-shadow: 0 0 10px #ff4757;
+  border: 1px solid white;
+}
+
+/* Redesigned Collapsible Chat Panel */
+.battle-chat-panel {
+  position: absolute;
+  top: 160px;
+  right: 2rem;
+  width: 320px;
+  height: calc(100% - 280px);
+  background: rgba(4, 10, 18, 0.85);
+  backdrop-filter: blur(15px);
+  border: 1px solid rgba(212, 175, 55, 0.35);
+  border-radius: 16px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+  transition: transform 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), opacity 0.3s ease;
+  z-index: 90;
+  pointer-events: auto;
+}
+
+.battle-chat-panel:not(.expanded) {
+  transform: translateX(130%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.4);
+  border-bottom: 1px solid rgba(212, 175, 55, 0.25);
+  padding: 12px 16px;
+}
+
+.chat-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #d4af37;
+  font-weight: bold;
+  letter-spacing: 1px;
+}
+
+.icon-chat-header {
+  width: 18px;
+  height: 18px;
+}
+
+.btn-close-chat {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.btn-close-chat:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.icon-close-chat {
+  width: 16px;
+  height: 16px;
+}
+
+.messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  font-size: 0.9rem;
+  font-family: sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.message {
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.sender {
+  color: #d4af37;
+  font-weight: bold;
+  margin-right: 6px;
+  font-family: 'Cinzel', serif;
+}
+
+.chat-input input {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  border-top: 1px solid rgba(212, 175, 55, 0.25);
+  color: white;
+  padding: 14px 18px;
+  outline: none;
+  font-family: sans-serif;
+  box-sizing: border-box;
+}
+
+.chat-input input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
 .hud-bottom {
   margin-top: auto;
   display: flex;
@@ -262,49 +716,12 @@ onUnmounted(() => {
   padding: 2rem;
   width: 100%;
   box-sizing: border-box;
-  gap: 2rem;
   pointer-events: none;
+  z-index: 15;
 }
 
 .hud-bottom > * {
   pointer-events: auto;
-}
-
-.battle-chat {
-  width: 320px;
-  max-height: 250px;
-  background: rgba(0, 0, 0, 0.8);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(212, 175, 55, 0.3);
-  border-radius: 12px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-}
-
-.messages {
-  height: 160px;
-  overflow-y: auto;
-  padding: 1rem;
-  font-size: 0.9rem;
-}
-
-.sender {
-  color: #d4af37;
-  font-weight: bold;
-  margin-right: 5px;
-}
-
-.chat-input input {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: none;
-  border-top: 1px solid rgba(212, 175, 55, 0.2);
-  color: white;
-  padding: 12px 15px;
-  outline: none;
-  font-family: inherit;
 }
 
 .btn-surrender {
@@ -318,6 +735,132 @@ onUnmounted(() => {
   text-transform: uppercase;
   letter-spacing: 2px;
   transition: all 0.3s ease;
+}
+
+.btn-surrender:hover {
+  background: linear-gradient(rgba(255, 0, 0, 0.25), rgba(255, 0, 0, 0.35));
+  box-shadow: 0 0 15px rgba(255, 68, 68, 0.3);
+}
+
+/* Alert overlays: low performance fallbacks & errors */
+.fps-prompt-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 200;
+  backdrop-filter: blur(10px);
+}
+
+.fps-prompt-content {
+  background: rgba(8, 20, 36, 0.95);
+  border: 2px solid #d4af37;
+  border-radius: 16px;
+  padding: 2rem;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.8);
+}
+
+.icon-alert-warning {
+  width: 48px;
+  height: 48px;
+  color: #eccc68;
+  margin-bottom: 1rem;
+}
+
+.fps-prompt-content h3 {
+  font-size: 1.5rem;
+  color: #d4af37;
+  margin-top: 0;
+}
+
+.fps-prompt-content p {
+  color: rgba(255, 255, 255, 0.8);
+  font-family: sans-serif;
+  line-height: 1.6;
+}
+
+.fps-prompt-actions {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+}
+
+.btn-epic-alert {
+  background: #d4af37;
+  color: black;
+  border: none;
+  padding: 0.8rem 1.6rem;
+  font-family: 'Cinzel', serif;
+  font-weight: bold;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.btn-ghost-alert {
+  background: transparent;
+  border: 1px solid white;
+  color: white;
+  padding: 0.8rem 1.6rem;
+  font-family: 'Cinzel', serif;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.engine-error-alert {
+  position: absolute;
+  top: 100px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(180, 10, 10, 0.9);
+  border: 1.5px solid #ff4757;
+  border-radius: 8px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  z-index: 150;
+  max-width: 80%;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
+}
+
+.icon-alert-danger {
+  width: 24px;
+  height: 24px;
+  color: white;
+}
+
+.error-msg-content h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  color: white;
+}
+
+.error-msg-content p {
+  margin: 2px 0 0 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.8);
+  font-family: sans-serif;
+}
+
+.btn-error-dismiss {
+  background: white;
+  color: #b40a0a;
+  border: none;
+  padding: 5px 12px;
+  font-family: 'Cinzel', serif;
+  font-weight: bold;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
 }
 
 .game-status-overlay {
@@ -367,7 +910,18 @@ onUnmounted(() => {
   margin-left: 1rem;
 }
 
-/* Responsiveness Overhaul */
+/* Pulse animation for notifications */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); box-shadow: 0 0 15px #ff4757; }
+  100% { transform: scale(1); }
+}
+
+.animate-pulse {
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+/* Responsiveness overrides */
 @media (max-width: 1024px) {
   .game-center h1 { font-size: 1.4rem; }
 }
@@ -387,10 +941,58 @@ onUnmounted(() => {
     padding: 1rem;
     gap: 1rem;
   }
-  .battle-chat { width: 100%; max-height: 120px; }
-  .messages { height: 80px; }
   .btn-surrender { width: 100%; padding: 0.8rem; }
   .outcome-title { font-size: 2rem; }
+
+  /* Mobile floating horizontal action controls bar - centered below the board to prevent overlapping pieces */
+  .action-controls-bar {
+    top: auto;
+    bottom: 110px;
+    left: 50%;
+    transform: translateX(-50%);
+    right: auto;
+    flex-direction: row;
+    gap: 16px;
+  }
+
+  .toggle-group-premium {
+    flex-direction: row;
+    border-radius: 30px;
+  }
+
+  .btn-toggle-view {
+    padding: 10px 16px;
+  }
+
+  .btn-toggle-view span {
+    display: inline; /* Keep text visible on mobile for high premium clarity */
+  }
+
+  /* Mobile slide-up chat panel */
+  .battle-chat-panel {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 320px;
+    border-radius: 24px 24px 0 0;
+    border-left: none;
+    border-right: none;
+    border-bottom: none;
+    box-shadow: 0 -12px 35px rgba(0, 0, 0, 0.85);
+    margin: 0;
+    z-index: 110;
+  }
+
+  .battle-chat-panel:not(.expanded) {
+    transform: translateY(110%);
+    opacity: 0;
+  }
+
+  .messages {
+    height: 200px;
+  }
 }
 
 @media (max-width: 480px) {

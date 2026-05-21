@@ -19,6 +19,10 @@ export const useGameStore = defineStore('game', {
     },
     isMultiplayer: false,
     isMyTurn: true,
+    viewMode: '3d' as '2d' | '3d',
+    chatExpanded: true,
+    unreadMessages: 0,
+    engineError: null as string | null,
   }),
 
   actions: {
@@ -61,6 +65,27 @@ export const useGameStore = defineStore('game', {
       this.updateStatus();
       this.selectedSquare = null;
       this.validMoves = [];
+    },
+
+    setViewMode(mode: '2d' | '3d') {
+      this.viewMode = mode;
+    },
+
+    toggleChat() {
+      this.chatExpanded = !this.chatExpanded;
+      if (this.chatExpanded) {
+        this.unreadMessages = 0;
+      }
+    },
+
+    incrementUnread() {
+      if (!this.chatExpanded) {
+        this.unreadMessages++;
+      }
+    },
+
+    resetUnread() {
+      this.unreadMessages = 0;
     }
   }
 });

@@ -69,12 +69,29 @@ export class GameManager {
     const scene = this.engine.getScene();
 
     scene.onPointerObservable.add((pointerInfo) => {
+      if (this.gameStore.viewMode === '2d') return;
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
         if (pointerInfo.pickInfo?.hit && pointerInfo.pickInfo.pickedMesh) {
           this.handlePick(pointerInfo.pickInfo.pickedMesh as AbstractMesh);
         }
       }
     });
+  }
+
+  public async handle2DSquareClick(squareName: string) {
+    if (this.isAnimating) return;
+
+    const pieceOnSquare = this.findPieceMeshAt(squareName);
+    
+    if (pieceOnSquare && pieceOnSquare.metadata.color === this.gameStore.playerColor && this.gameStore.isMyTurn) {
+      this.gameStore.selectSquare(squareName);
+      this.highlightValidMoves();
+      return;
+    }
+
+    if (this.gameStore.selectedSquare) {
+      await this.tryMove(squareName);
+    }
   }
 
   private async handlePick(mesh: AbstractMesh) {
@@ -130,19 +147,29 @@ export class GameManager {
       this.isAnimating = true;
       const result = await this.gameStore.makeMove(move);
       if (result) {
-        const pieceMesh = this.findPieceMeshAt(fromSquare);
-        if (pieceMesh) {
+        if (this.gameStore.viewMode === '2d') {
+          // 2D Mode: Play sound instantly, skip heavy 3D anims
           if (validMove.captured) {
             this.sounds.playSound('capture');
-            await this.playCinematicAttack(fromSquare, toSquare, validMove.captured);
           } else {
             this.sounds.playSound('move');
-            await this.pieces.movePiece(pieceMesh.name, this.parseSquare(toSquare).row, this.parseSquare(toSquare).col);
+          }
+        } else {
+          // 3D Mode: Play immersive animations
+          const pieceMesh = this.findPieceMeshAt(fromSquare);
+          if (pieceMesh) {
+            if (validMove.captured) {
+              this.sounds.playSound('capture');
+              await this.playCinematicAttack(fromSquare, toSquare, validMove.captured);
+            } else {
+              this.sounds.playSound('move');
+              await this.pieces.movePiece(pieceMesh.name, this.parseSquare(toSquare).row, this.parseSquare(toSquare).col);
+            }
           }
         }
       }
       this.isAnimating = false;
-      // Use incremental sync to avoid full rebuild
+      // Use incremental sync to keep the hidden 3D board in state sync
       this.syncBoard();
 
       if (!this.gameStore.isMultiplayer && !this.gameStore.isMyTurn && !this.gameStore.status.isGameOver) {
