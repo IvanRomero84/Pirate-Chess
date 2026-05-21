@@ -1,4 +1,4 @@
-import { Scene, PointerEventTypes, AbstractMesh, Color3 } from '@babylonjs/core';
+import { PointerEventTypes, AbstractMesh, Color3 } from '@babylonjs/core';
 import { GameEngine } from './GameEngine';
 import { BoardRenderer } from './BoardRenderer';
 import { PieceRenderer } from './PieceRenderer';
@@ -6,7 +6,7 @@ import { AssetManager } from './AssetManager';
 import { EffectManager } from './EffectManager';
 import { SoundManager } from './SoundManager';
 import { useGameStore } from '../stores/gameStore';
-import { ChessAI } from '../ai/ChessAI';
+import AIWorker from '../ai/chess-ai.worker.ts?worker';
 
 export class GameManager {
   private engine: GameEngine;
@@ -15,7 +15,7 @@ export class GameManager {
   private assets: AssetManager;
   private effects: EffectManager;
   private sounds: SoundManager;
-  private ai: ChessAI;
+  private aiWorker: Worker;
   private gameStore = useGameStore();
   private isAnimating = false;
 
@@ -26,10 +26,25 @@ export class GameManager {
     this.pieces = new PieceRenderer(engine.getScene(), this.assets);
     this.effects = new EffectManager(engine.getScene());
     this.sounds = new SoundManager(engine.getScene());
-    this.ai = new ChessAI();
+    this.aiWorker = new AIWorker();
 
     this.setupInteraction();
     this.initModels();
+  }
+
+  /**
+   * Sends the current FEN to the AI Web Worker and returns the best move
+   * asynchronously without blocking the render loop.
+   */
+  private askAI(fen: string, depth = 3): Promise<string | null> {
+    return new Promise((resolve) => {
+      const onMessage = (e: MessageEvent<{ move: string | null }>) => {
+        this.aiWorker.removeEventListener('message', onMessage);
+        resolve(e.data.move);
+      };
+      this.aiWorker.addEventListener('message', onMessage);
+      this.aiWorker.postMessage({ fen, depth });
+    });
   }
 
   private async initModels() {
@@ -56,7 +71,7 @@ export class GameManager {
     scene.onPointerObservable.add((pointerInfo) => {
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
         if (pointerInfo.pickInfo?.hit && pointerInfo.pickInfo.pickedMesh) {
-          this.handlePick(pointerInfo.pickInfo.pickedMesh as Mesh);
+          this.handlePick(pointerInfo.pickInfo.pickedMesh as AbstractMesh);
         }
       }
     });
@@ -131,7 +146,7 @@ export class GameManager {
       this.syncBoard();
 
       if (!this.gameStore.isMultiplayer && !this.gameStore.isMyTurn && !this.gameStore.status.isGameOver) {
-        setTimeout(() => this.handleAIMove(), 800);
+        setTimeout(() => this.handleAIMove(), 400);
       }
     }
 
@@ -164,9 +179,9 @@ export class GameManager {
       // Step 1: move to the captured square (this also updates piecesBySquare to 'to')
       await this.pieces.movePiece(attacker.name, toSquare.row, toSquare.col);
 
-      // Step 2: play attack animation on the now-disposed-but-still-visible target
+      // Step 2: play attack animation
       this.pieces.playAttackAnimation(attacker.name);
-      await new Promise(resolve => setTimeout(resolve, 600));
+      await new Promise(resolve => setTimeout(resolve, 400));
 
       // Step 3: explosion + death on the captured piece
       this.effects.createMagicExplosion(targetPos);
@@ -178,7 +193,7 @@ export class GameManager {
       if (attackerMesh) this.pieces.returnToIdle(attackerMesh.name);
     }
 
-    await new Promise(resolve => setTimeout(resolve, 400));
+    await new Promise(resolve => setTimeout(resolve, 200));
   }
 
   public syncBoard() {
@@ -230,8 +245,12 @@ export class GameManager {
     if (this.gameStore.status.isGameOver) return;
     if (this.gameStore.isMyTurn) return;
 
-    const bestMoveStr = this.ai.getBestMove(this.gameStore.game.getFEN());
+    // Ask the AI worker — runs off the main thread, no freezes
+    const bestMoveStr = await this.askAI(this.gameStore.game.getFEN());
     if (!bestMoveStr) return;
+
+    // Re-check game state after async gap (player may have resigned, etc.)
+    if (this.gameStore.status.isGameOver || this.gameStore.isMyTurn) return;
 
     const moves = this.gameStore.game.getAllValidMoves();
     const move = moves.find(m => m.san === bestMoveStr || m.lan === bestMoveStr || (m.from + m.to) === bestMoveStr);
@@ -244,7 +263,8 @@ export class GameManager {
     this.gameStore.selectSquare(move.from);
     this.highlightValidMoves();
 
-    await new Promise(resolve => setTimeout(resolve, 800));
+    // Short pause so the player can see which piece the AI selected
+    await new Promise(resolve => setTimeout(resolve, 300));
     await this.tryMove(move.to);
   }
 

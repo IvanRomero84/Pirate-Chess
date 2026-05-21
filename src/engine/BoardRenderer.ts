@@ -106,7 +106,7 @@ export class BoardRenderer {
     waterMat.albedoColor = new Color3(0.01, 0.18, 0.32);
     waterMat.metallic = 0.95;
     waterMat.roughness = 0.08;
-    waterMat.transparencyMode = PBRMaterial.PBRMETHOD_BLEND;
+    waterMat.transparencyMode = 1;
     waterMat.alpha = 0.7; // Beautiful translucent blend
     waterMat.emissiveColor = new Color3(0.02, 0.12, 0.18); // soft bioluminescent ocean glow
     waterMat.freeze();
