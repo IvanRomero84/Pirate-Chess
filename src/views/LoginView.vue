@@ -179,8 +179,9 @@ const handleSocialLogin = async (provider: 'google' | 'discord' | 'github') => {
   height: 100vh;
   display: flex;
   justify-content: center;
-  align-items: center;
   overflow-y: auto;
+  padding: 2rem 0;
+  box-sizing: border-box;
   font-family: 'Poppins', sans-serif;
   color: #fff;
   z-index: 100;
@@ -227,7 +228,7 @@ const handleSocialLogin = async (provider: 'google' | 'discord' | 'github') => {
   padding: 2.5rem;
   z-index: 2;
   box-sizing: border-box;
-  margin: 1.5rem;
+  margin: auto 1.5rem;
   transition: box-shadow 0.3s ease, border-color 0.3s ease;
 }
 
@@ -371,6 +372,7 @@ label {
   position: relative;
   display: flex;
   align-items: center;
+  width: 100%;
 }
 
 .input-icon {
@@ -636,7 +638,7 @@ input:disabled {
 @media (max-width: 600px) {
   .login-card {
     padding: 1.75rem 1.25rem;
-    margin: 1rem;
+    margin: auto 1rem;
     border-radius: 12px;
   }
   
@@ -647,6 +649,12 @@ input:disabled {
   .logo-subtitle {
     font-size: 0.95rem;
     letter-spacing: 4px;
+  }
+
+  .label-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.35rem;
   }
 
   .social-buttons {
@@ -667,6 +675,27 @@ input:disabled {
 
   .btn-primary {
     padding: 1.1rem; /* larger tap target */
+    margin-top: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .login-card {
+    padding: 1.5rem 1rem;
+    margin: auto 0.75rem;
+  }
+
+  .logo-title {
+    font-size: 2rem;
+  }
+
+  .logo-subtitle {
+    font-size: 0.85rem;
+    letter-spacing: 3px;
+  }
+
+  .card-intro h3 {
+    font-size: 1.4rem;
   }
 }
 </style>

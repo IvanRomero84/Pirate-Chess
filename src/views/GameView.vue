@@ -239,11 +239,9 @@ const resetTimer = () => {
 };
 
 const handleSurrender = () => {
-  if (confirm('¿Estás seguro de que quieres rendirte y regresar al East Blue?')) {
-    gameStore.status.isGameOver = true;
-    gameStore.status.winner = gameStore.playerColor === 'w' ? 'b' : 'w';
-    stopTimer();
-  }
+  gameStore.status.isGameOver = true;
+  gameStore.status.winner = gameStore.playerColor === 'w' ? 'b' : 'w';
+  stopTimer();
 };
 
 const handleNewVoyage = () => {
@@ -360,9 +358,7 @@ watch(() => gameStore.status.fen, () => {
 });
 
 const handleBack = () => {
-  if (confirm('Are you sure you want to surrender and return to the East Blue?')) {
-    router.push('/');
-  }
+  router.push('/');
 };
 
 onUnmounted(() => {
@@ -879,6 +875,8 @@ onUnmounted(() => {
 
 .game-over-content {
   text-align: center;
+  padding: 2rem;
+  box-sizing: border-box;
 }
 
 .outcome-title {
@@ -888,26 +886,76 @@ onUnmounted(() => {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   letter-spacing: 6px;
+  font-weight: 900;
+}
+
+.outcome-decoration {
+  width: 100px;
+  height: 2px;
+  background: linear-gradient(to right, transparent, #d4af37, transparent);
+  margin: 1.25rem auto;
+}
+
+.outcome-subtitle {
+  font-size: 1.1rem;
+  color: #a0aec0;
+  margin: 0 0 2.5rem;
+  font-family: 'Poppins', sans-serif;
+}
+
+.game-over-actions {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 1.5rem;
+  margin-top: 2.5rem;
+  flex-wrap: wrap;
+}
+
+.btn-epic, .btn-ghost {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  min-width: 200px;
+  height: 52px;
+  padding: 0 2rem;
+  font-family: 'Cinzel', serif;
+  font-size: 1.1rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  box-sizing: border-box;
+  text-decoration: none;
 }
 
 .btn-epic {
-  background: #d4af37;
-  color: black;
+  background: linear-gradient(135deg, #d4af37 0%, #aa8412 100%);
+  color: #0d0800;
   border: none;
-  padding: 1rem 2rem;
-  font-family: 'Cinzel', serif;
-  font-size: 1.2rem;
-  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.3);
+}
+
+.btn-epic:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(212, 175, 55, 0.5);
+  background: linear-gradient(135deg, #f1d592 0%, #d4af37 100%);
 }
 
 .btn-ghost {
-  background: transparent;
-  border: 1px solid white;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.35);
   color: white;
-  padding: 1rem 2rem;
-  font-family: 'Cinzel', serif;
-  cursor: pointer;
-  margin-left: 1rem;
+  backdrop-filter: blur(5px);
+}
+
+.btn-ghost:hover {
+  border-color: #d4af37;
+  color: #d4af37;
+  background: rgba(212, 175, 55, 0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(212, 175, 55, 0.1);
 }
 
 /* Pulse animation for notifications */
@@ -943,6 +991,31 @@ onUnmounted(() => {
   }
   .btn-surrender { width: 100%; padding: 0.8rem; }
   .outcome-title { font-size: 2rem; }
+  
+  .game-over-actions {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 1.25rem !important;
+    width: 100% !important;
+    max-width: 280px !important;
+    margin: 2rem auto 0 !important;
+  }
+  
+  .btn-epic, .btn-ghost {
+    display: inline-flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    height: 50px !important;
+    padding: 0 1.5rem !important;
+    font-size: 1rem !important;
+    box-sizing: border-box !important;
+  }
 
   /* Mobile floating horizontal action controls bar - centered below the board to prevent overlapping pieces */
   .action-controls-bar {

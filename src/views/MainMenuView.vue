@@ -123,13 +123,17 @@ const userRank = computed(() => {
           
           <div class="side-options">
             <button @click="selectSide('w')" class="side-btn white">
-              <div class="side-icon">☠️</div>
+              <div class="side-icon">
+                <img src="/Piratas_de_Sombrero_de_Paja_bandera.webp" alt="Piratas de Sombrero de Paja" class="side-flag" />
+              </div>
               <span class="side-name">Straw Hat Pirates</span>
               <span class="side-desc">Set sail with Luffy's crew</span>
             </button>
 
             <button @click="selectSide('b')" class="side-btn black">
-              <div class="side-icon">⚓</div>
+              <div class="side-icon">
+                <img src="/Marine_bandera.webp" alt="La Marina" class="side-flag" />
+              </div>
               <span class="side-name">The Navy / Marines</span>
               <span class="side-desc">Enforce absolute justice</span>
             </button>
@@ -154,16 +158,24 @@ const userRank = computed(() => {
   align-items: center;
   color: white;
   font-family: 'Cinzel', serif;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 2.5rem 1.5rem; /* Safe vertical and horizontal cushion for desktop */
 }
 
 .menu-content {
   text-align: center;
   max-width: 600px;
-  padding: 3rem;
+  width: 100%;
+  padding: 2rem 2.5rem; /* Elegant padding that saves vertical space */
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(8px);
   border: 1px solid rgba(212, 175, 55, 0.3);
   border-radius: 12px;
+  box-sizing: border-box;
+  margin: auto; /* Perfectly centers when fits, and scrolls from top when overflows */
+  display: flex;
+  flex-direction: column;
 }
 
 .game-title {
@@ -184,16 +196,16 @@ const userRank = computed(() => {
 }
 
 .menu-actions {
-  margin-top: 4rem;
+  margin-top: 2.25rem; /* Saved 28px */
   display: flex;
   flex-direction: column;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .menu-btn {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(212, 175, 55, 0.5);
-  padding: 1.5rem;
+  padding: 1.25rem; /* Visual balance */
   color: white;
   text-decoration: none;
   cursor: pointer;
@@ -237,15 +249,15 @@ const userRank = computed(() => {
 }
 
 .footer {
-  margin-top: 4rem;
+  margin-top: 2.25rem; /* Saved 28px */
   font-size: 0.8rem;
   opacity: 0.4;
 }
 
 /* Premium profile card styling */
 .profile-card {
-  margin-top: 2rem;
-  padding: 1.5rem;
+  margin-top: 1.5rem; /* Saved 8px */
+  padding: 1.25rem; /* Sleeker padding */
   background: rgba(4, 12, 22, 0.5);
   border: 1px solid rgba(212, 175, 55, 0.3);
   border-radius: 12px;
@@ -254,7 +266,7 @@ const userRank = computed(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1rem;
   transition: all 0.3s ease;
 }
 
@@ -394,8 +406,8 @@ const userRank = computed(() => {
 
 /* Prompt styles */
 .lobby-auth-prompt {
-  margin-top: 2rem;
-  padding: 1.5rem;
+  margin-top: 1.5rem; /* Saved 8px */
+  padding: 1.25rem;
   border-top: 1px solid rgba(212, 175, 55, 0.2);
   display: flex;
   flex-direction: column;
@@ -438,11 +450,28 @@ const userRank = computed(() => {
 
 
 @media (max-width: 600px) {
+  .main-menu {
+    padding: 1.5rem 1rem; /* Sleek cushion for mobile viewport */
+  }
+  .menu-content {
+    padding: 1.5rem 1.25rem;
+    width: 100%;
+    box-sizing: border-box;
+  }
   .game-title { font-size: 2.5rem; letter-spacing: 4px; }
-  .menu-content { padding: 1.5rem; width: 90vw; }
   .menu-btn { padding: 1rem; }
   .btn-text { font-size: 1.1rem; }
-  .side-options { flex-direction: column; }
+  .side-options { flex-direction: column; gap: 1rem; margin: 1.5rem 0; }
+  .modal-content.side-selection { padding: 1.5rem; width: 95%; }
+  .modal-content.side-selection h3 { font-size: 1.8rem; }
+  .side-btn { padding: 1rem; }
+  .side-flag { width: 60px; height: 60px; }
+  .side-icon { height: 64px; margin-bottom: 0.5rem; }
+  .side-name { font-size: 1.1rem; }
+  .side-desc { font-size: 0.75rem; }
+  .menu-actions { margin-top: 1.5rem !important; }
+  .profile-card { margin-top: 1.25rem !important; }
+  .footer { margin-top: 1.5rem !important; }
 }
 
 /* Modal Styles */
@@ -450,12 +479,14 @@ const userRank = computed(() => {
   position: fixed;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100vh;
   background: rgba(0, 0, 0, 0.85);
   display: flex;
   justify-content: center;
-  align-items: center;
+  overflow-y: auto;
+  padding: 2rem 0;
+  box-sizing: border-box;
   z-index: 1000;
   backdrop-filter: blur(10px);
 }
@@ -469,6 +500,8 @@ const userRank = computed(() => {
   width: 90%;
   text-align: center;
   box-shadow: 0 0 50px rgba(212, 175, 55, 0.15);
+  margin: auto;
+  box-sizing: border-box;
 }
 
 h3 {
@@ -497,9 +530,23 @@ h3 {
 }
 
 .side-icon {
-  font-size: 3.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 1.25rem;
   transition: transform 0.3s ease;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 80px;
+}
+
+.side-flag {
+  width: 76px;
+  height: 76px;
+  object-fit: cover;
+  filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.6));
+  border-radius: 50%;
+  border: 2px solid #d4af37;
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.25);
+  transition: all 0.3s ease;
 }
 
 .side-name {
