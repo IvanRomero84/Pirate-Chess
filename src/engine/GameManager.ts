@@ -70,12 +70,72 @@ export class GameManager {
 
     scene.onPointerObservable.add((pointerInfo) => {
       if (this.gameStore.viewMode === '2d') return;
+      
       if (pointerInfo.type === PointerEventTypes.POINTERDOWN) {
         if (pointerInfo.pickInfo?.hit && pointerInfo.pickInfo.pickedMesh) {
           this.handlePick(pointerInfo.pickInfo.pickedMesh as AbstractMesh);
         }
+      } else if (pointerInfo.type === PointerEventTypes.POINTERMOVE) {
+        if (pointerInfo.pickInfo?.hit && pointerInfo.pickInfo.pickedMesh) {
+          const pieceData = this.getPieceDataFromMesh(pointerInfo.pickInfo.pickedMesh as AbstractMesh);
+          if (pieceData) {
+            this.gameStore.setHoveredPiece({
+              type: pieceData.type,
+              color: pieceData.color,
+              character: pieceData.characterName,
+              square: pieceData.squareName
+            });
+          } else {
+            this.gameStore.setHoveredPiece(null);
+          }
+        } else {
+          this.gameStore.setHoveredPiece(null);
+        }
       }
     });
+  }
+
+  private getPieceDataFromMesh(mesh: AbstractMesh) {
+    const metadata = mesh.metadata;
+    
+    // Si el mesh recogido es una casilla del tablero, no es una pieza
+    if (metadata && metadata.squareName && !metadata.type && !mesh.parent) {
+      return null;
+    }
+
+    if (metadata && metadata.type) {
+      return {
+        type: metadata.type,
+        color: metadata.color,
+        squareName: metadata.squareName,
+        characterName: this.getCharacterName(metadata.type, metadata.color)
+      };
+    }
+
+    // Intentar subir por los padres del mesh para encontrar la pieza root
+    let node = mesh.parent;
+    while (node) {
+      const am = node as AbstractMesh;
+      if (am.metadata && am.metadata.type) {
+        return {
+          type: am.metadata.type,
+          color: am.metadata.color,
+          squareName: am.metadata.squareName,
+          characterName: this.getCharacterName(am.metadata.type, am.metadata.color)
+        };
+      }
+      node = node.parent;
+    }
+
+    return null;
+  }
+
+  private getCharacterName(type: string, color: string): string {
+    const names: Record<string, Record<string, string>> = {
+      w: { k: 'Luffy', q: 'Nami', b: 'Zoro', n: 'Sanji', r: 'Jimbei', p: 'Franky' },
+      b: { k: 'Sengoku', q: 'Akainu', b: 'Kuzan', n: 'Kizaru', r: 'Fujitora', p: 'Marine' }
+    };
+    return names[color]?.[type] || '';
   }
 
   public async handle2DSquareClick(squareName: string) {

@@ -2,6 +2,7 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signInWithPopup, 
+  signInWithRedirect,
   GoogleAuthProvider,
   GithubAuthProvider,
   OAuthProvider,
@@ -30,23 +31,38 @@ export const authService = {
   },
 
   // 2. Social Auth Providers
-  async loginWithGoogle(): Promise<User> {
+  async loginWithGoogle(): Promise<User | void> {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
-    const userCredential = await signInWithPopup(auth, provider);
-    return userCredential.user;
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (isMobile) {
+      return signInWithRedirect(auth, provider);
+    } else {
+      const userCredential = await signInWithPopup(auth, provider);
+      return userCredential.user;
+    }
   },
 
-  async loginWithDiscord(): Promise<User> {
+  async loginWithDiscord(): Promise<User | void> {
     const provider = new OAuthProvider('discord.com');
-    const userCredential = await signInWithPopup(auth, provider);
-    return userCredential.user;
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (isMobile) {
+      return signInWithRedirect(auth, provider);
+    } else {
+      const userCredential = await signInWithPopup(auth, provider);
+      return userCredential.user;
+    }
   },
 
-  async loginWithGithub(): Promise<User> {
+  async loginWithGithub(): Promise<User | void> {
     const provider = new GithubAuthProvider();
-    const userCredential = await signInWithPopup(auth, provider);
-    return userCredential.user;
+    const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (isMobile) {
+      return signInWithRedirect(auth, provider);
+    } else {
+      const userCredential = await signInWithPopup(auth, provider);
+      return userCredential.user;
+    }
   },
 
   // 3. Password Reset & Verification

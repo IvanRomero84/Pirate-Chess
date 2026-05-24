@@ -96,6 +96,14 @@
             {{ gameStore.unreadMessages }}
           </span>
         </button>
+
+        <button 
+          class="btn-toggle-legend" 
+          @click="showLegend = true"
+          title="Ver Equivalencias de Piezas"
+        >
+          <HelpCircle class="icon-ctrl" />
+        </button>
       </div>
 
       <!-- Collapsible Battle Chat Panel -->
@@ -159,6 +167,73 @@
           <button class="btn-error-dismiss" @click="gameStore.engineError = null">Entendido</button>
         </div>
       </Transition>
+
+      <!-- Hover 3D Tooltip Premium Overlay -->
+      <Transition name="slide-fade">
+        <div 
+          v-if="gameStore.viewMode === '3d' && gameStore.hoveredPiece" 
+          class="hover-3d-tooltip"
+          :class="[gameStore.hoveredPiece.color]"
+        >
+          <div class="hover-3d-portrait-wrapper">
+            <img :src="getPieceImage3D(gameStore.hoveredPiece.type, gameStore.hoveredPiece.color)" class="hover-3d-portrait" />
+          </div>
+          <div class="hover-3d-info">
+            <span class="hover-3d-faction-title">
+              {{ gameStore.hoveredPiece.color === 'w' ? 'Sombreros de Paja' : 'La Marina' }}
+            </span>
+            <h3 class="hover-3d-char-name">{{ gameStore.hoveredPiece.character }}</h3>
+            <div class="hover-3d-role-row">
+              <span class="hover-3d-role-icon" v-html="CHESS_ICONS[gameStore.hoveredPiece.type]"></span>
+              <span class="hover-3d-role-label">{{ getPieceChessRoleName(gameStore.hoveredPiece.type) }} ({{ gameStore.hoveredPiece.square.toUpperCase() }})</span>
+            </div>
+          </div>
+        </div>
+      </Transition>
+
+      <!-- Leyenda / Modal de Equivalencias -->
+      <Transition name="fade">
+        <div class="legend-modal-overlay" v-if="showLegend" @click.self="showLegend = false">
+          <div class="legend-modal-content">
+            <div class="legend-header">
+              <h2>Equivalencias de Batalla</h2>
+              <button class="btn-close-legend" @click="showLegend = false">
+                <X class="icon-close-chat" />
+              </button>
+            </div>
+            
+            <div class="legend-body">
+              <div class="legend-faction white-faction">
+                <h3>Sombreros de Paja (Blancas)</h3>
+                <div class="legend-grid">
+                  <div v-for="item in whiteLegend" :key="item.type" class="legend-item">
+                    <div class="legend-badge" v-html="CHESS_ICONS[item.type]"></div>
+                    <img :src="item.img" class="legend-img" />
+                    <div class="legend-text">
+                      <span class="role">{{ item.role }}</span>
+                      <span class="char">{{ item.char }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="legend-faction black-faction">
+                <h3>La Marina (Negras)</h3>
+                <div class="legend-grid">
+                  <div v-for="item in blackLegend" :key="item.type" class="legend-item">
+                    <div class="legend-badge" v-html="CHESS_ICONS[item.type]"></div>
+                    <img :src="item.img" class="legend-img" />
+                    <div class="legend-text">
+                      <span class="role">{{ item.role }}</span>
+                      <span class="char">{{ item.char }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>
@@ -178,12 +253,76 @@ import {
   Grid, 
   Rotate3d, 
   AlertTriangle, 
-  X 
+  X,
+  HelpCircle
 } from 'lucide-vue-next';
 import Board2D from '../components/Board2D.vue';
 
 const router = useRouter();
 const renderCanvas = ref<HTMLCanvasElement | null>(null);
+
+const showLegend = ref(false);
+
+const CHESS_ICONS: Record<string, string> = {
+  k: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M12 2l1.5 3h3L15 7.5l1.5 3.5h-9L9 7.5 7.5 5h3L12 2zm-8 18h16v2H4v-2zm2-2h12v-6H6v6z" /></svg>`,
+  q: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M12 2a2 2 0 100 4 2 2 0 000-4zm-7 7l2.5 9h9l2.5-9-3.5 3.5L12 6l-3.5 6.5L5 9zm-1 11h16v2H4v-2z" /></svg>`,
+  r: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M5 2h3v2h3V2h2v2h3V2h3v4H5V2zm2 18h10v2H7v-2zm-1-2h12V8H6v10z" /></svg>`,
+  b: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M12 2a3 3 0 00-3 3c0 2.5 3 6.5 3 6.5s3-4 3-6.5a3 3 0 00-3-3zm-6 18h12v2H6v-2zm1-2h10V10H7v8z" /></svg>`,
+  n: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M19 22H5c0-4 2-7 3-9.5V11c0-2.5 1-4.5 3.5-4.5S15 8 15 10v2.5c0 1-1 2-2 2h-1v2.5c0 1.5 1 2.5 3 2.5h4v2.5z" /></svg>`,
+  p: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M12 3a3.5 3.5 0 100 7 3.5 3.5 0 000-7zm-4 17h8v2H8v-2zm1-2h6v-6H9v6z" /></svg>`
+};
+
+const whiteLegend = [
+  { type: 'k', role: 'Rey', char: 'Luffy', img: '/Luffy_2d.webp' },
+  { type: 'q', role: 'Reina', char: 'Nami', img: '/Nami_2d.webp' },
+  { type: 'b', role: 'Alfil', char: 'Zoro', img: '/Roronoa_Zoro_2d.webp' },
+  { type: 'n', role: 'Caballo', char: 'Sanji', img: '/Sanji_2d.webp' },
+  { type: 'r', role: 'Torre', char: 'Jimbei', img: '/Jinbe_2d.webp' },
+  { type: 'p', role: 'Peón', char: 'Franky', img: '/Piratas_de_Sombrero_de_Paja_bandera.webp' }
+];
+
+const blackLegend = [
+  { type: 'k', role: 'Rey', char: 'Sengoku', img: '/Sengoku_2d.webp' },
+  { type: 'q', role: 'Reina', char: 'Akainu', img: '/Sakazuki_2d.webp' },
+  { type: 'b', role: 'Alfil', char: 'Kuzan', img: '/Kuzan_2d.webp' },
+  { type: 'n', role: 'Caballo', char: 'Kizaru', img: '/Borsalino_2d.webp' },
+  { type: 'r', role: 'Torre', char: 'Fujitora', img: '/Fujitora_2d.webp' },
+  { type: 'p', role: 'Peón', char: 'Marine', img: '/Marine_bandera.webp' }
+];
+
+const getPieceImage3D = (type: string, color: string): string => {
+  const images: Record<string, Record<string, string>> = {
+    w: {
+      k: '/Luffy_2d.webp',
+      q: '/Nami_2d.webp',
+      b: '/Roronoa_Zoro_2d.webp',
+      n: '/Sanji_2d.webp',
+      r: '/Jinbe_2d.webp',
+      p: '/Piratas_de_Sombrero_de_Paja_bandera.webp'
+    },
+    b: {
+      k: '/Sengoku_2d.webp',
+      q: '/Sakazuki_2d.webp',
+      b: '/Kuzan_2d.webp',
+      n: '/Borsalino_2d.webp',
+      r: '/Fujitora_2d.webp',
+      p: '/Marine_bandera.webp'
+    }
+  };
+  return images[color]?.[type] || '';
+};
+
+const getPieceChessRoleName = (type: string): string => {
+  const roles: Record<string, string> = {
+    k: 'Rey',
+    q: 'Reina',
+    r: 'Torre',
+    b: 'Alfil',
+    n: 'Caballo',
+    p: 'Peón'
+  };
+  return roles[type] || '';
+};
 const chatScroll = ref<HTMLElement | null>(null);
 const gameStore = useGameStore();
 const multiplayerStore = useMultiplayerStore();
@@ -1075,4 +1214,362 @@ onUnmounted(() => {
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.5s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
+
+/* Hover 3D Tooltip Style */
+.hover-3d-tooltip {
+  position: absolute;
+  bottom: 2rem;
+  left: 2rem;
+  background: rgba(4, 10, 18, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(212, 175, 55, 0.35);
+  border-radius: 12px;
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  max-width: 320px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 15px rgba(212, 175, 55, 0.2);
+  z-index: 95;
+  pointer-events: none;
+}
+
+.hover-3d-tooltip.w {
+  border-color: rgba(212, 175, 55, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(212, 175, 55, 0.25);
+}
+
+.hover-3d-tooltip.b {
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 20px rgba(255, 255, 255, 0.15);
+}
+
+.hover-3d-portrait-wrapper {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #d4af37;
+  background: #000;
+  box-shadow: 0 0 8px rgba(212, 175, 55, 0.4);
+}
+
+.hover-3d-tooltip.b .hover-3d-portrait-wrapper {
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.2);
+}
+
+.hover-3d-portrait {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.hover-3d-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hover-3d-faction-title {
+  font-size: 0.58rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: #a0aec0;
+  font-weight: bold;
+}
+
+.hover-3d-char-name {
+  font-size: 1.15rem;
+  margin: 0;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  background: linear-gradient(#ffffff, #e2e8f0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hover-3d-tooltip.w .hover-3d-char-name {
+  background: linear-gradient(#ffd700, #b8860b);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.hover-3d-role-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.hover-3d-role-icon {
+  width: 14px;
+  height: 14px;
+  color: #ffd700;
+  display: flex;
+  align-items: center;
+}
+
+.hover-3d-tooltip.b .hover-3d-role-icon {
+  color: #ffffff;
+}
+
+.hover-3d-role-label {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.85);
+  font-family: 'Cinzel', serif;
+  font-weight: bold;
+}
+
+/* Slide-Fade transition */
+.slide-fade-enter-active, .slide-fade-leave-active {
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+.slide-fade-enter-from, .slide-fade-leave-to {
+  transform: translateX(-30px);
+  opacity: 0;
+}
+
+/* Button Toggle Legend */
+.btn-toggle-legend {
+  background: rgba(4, 12, 22, 0.8);
+  border: 1px solid rgba(212, 175, 55, 0.4);
+  color: #eccc68;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(10px);
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+.btn-toggle-legend:hover {
+  transform: scale(1.05);
+  border-color: #d4af37;
+  box-shadow: 0 0 15px rgba(212, 175, 55, 0.4);
+}
+
+/* Legend Modal Style */
+.legend-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 300;
+  backdrop-filter: blur(12px);
+}
+
+.legend-modal-content {
+  background: linear-gradient(135deg, rgba(8, 20, 36, 0.95) 0%, rgba(3, 8, 14, 0.98) 100%);
+  border: 2px solid #d4af37;
+  border-radius: 20px;
+  width: 90%;
+  max-width: 720px;
+  max-height: 85vh;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 40px rgba(212, 175, 55, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: modalZoom 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
+}
+
+@keyframes modalZoom {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.legend-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  background: rgba(0, 0, 0, 0.4);
+  border-bottom: 1.5px solid rgba(212, 175, 55, 0.3);
+}
+
+.legend-header h2 {
+  margin: 0;
+  font-size: 1.6rem;
+  letter-spacing: 2px;
+  background: linear-gradient(#d4af37, #f1d592);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.btn-close-legend {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 6px;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.btn-close-legend:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  border-color: #d4af37;
+}
+
+.legend-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  display: flex;
+  gap: 30px;
+}
+
+.legend-faction {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.legend-faction h3 {
+  margin: 0;
+  font-size: 1.15rem;
+  letter-spacing: 1px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.white-faction h3 {
+  color: #ffd700;
+  border-bottom-color: rgba(212, 175, 55, 0.3);
+}
+
+.black-faction h3 {
+  color: #ffffff;
+  border-bottom-color: rgba(255, 255, 255, 0.15);
+}
+
+.legend-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  transition: all 0.2s ease;
+}
+
+.legend-item:hover {
+  background: rgba(212, 175, 55, 0.06);
+  border-color: rgba(212, 175, 55, 0.2);
+  transform: translateX(4px);
+}
+
+.black-faction .legend-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.legend-badge {
+  width: 22px;
+  height: 22px;
+  color: #ffd700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.black-faction .legend-badge {
+  color: #ffffff;
+}
+
+.legend-img {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1.5px solid #d4af37;
+  background: #000;
+}
+
+.black-faction .legend-img {
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.legend-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.legend-text .role {
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  color: #a0aec0;
+  font-family: 'Cinzel', serif;
+  font-weight: bold;
+}
+
+.legend-text .char {
+  font-size: 0.95rem;
+  font-weight: bold;
+  color: white;
+}
+
+/* Responsiveness overrides for Legend Modal */
+@media (max-width: 768px) {
+  .legend-body {
+    flex-direction: column;
+    gap: 20px;
+    padding: 16px;
+  }
+  
+  .legend-modal-content {
+    max-height: 90vh;
+  }
+  
+  .legend-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .hover-3d-tooltip {
+    bottom: auto;
+    top: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 300px;
+    padding: 10px 14px;
+    gap: 12px;
+  }
+
+  .hover-3d-portrait-wrapper {
+    width: 44px;
+    height: 44px;
+  }
+
+  .hover-3d-char-name {
+    font-size: 1rem;
+  }
+
+  .slide-fade-enter-from, .slide-fade-leave-to {
+    transform: translate(-50%, -20px);
+    opacity: 0;
+  }
+}
 </style>

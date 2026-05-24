@@ -23,6 +23,7 @@ export const useGameStore = defineStore('game', {
     chatExpanded: true,
     unreadMessages: 0,
     engineError: null as string | null,
+    hoveredPiece: null as { type: string; color: string; character: string; square: string } | null,
   }),
 
   actions: {
@@ -86,6 +87,10 @@ export const useGameStore = defineStore('game', {
 
     resetUnread() {
       this.unreadMessages = 0;
+    },
+    
+    setHoveredPiece(piece: { type: string; color: string; character: string; square: string } | null) {
+      this.hoveredPiece = piece;
     }
   }
 });

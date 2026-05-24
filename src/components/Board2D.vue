@@ -40,7 +40,13 @@
                   :alt="getPieceCharacterName(getPieceAt(r, c)?.type || '', getPieceAt(r, c)?.color || '')" 
                 />
               </div>
-              <span class="character-name">{{ getPieceCharacterName(getPieceAt(r, c)?.type || '', getPieceAt(r, c)?.color || '') }}</span>
+              
+              <!-- Chess Piece Badge -->
+              <div class="chess-role-badge" :title="getPieceChessRoleName(getPieceAt(r, c)?.type || '')">
+                <span class="role-icon-svg" v-html="getChessRoleIcon(getPieceAt(r, c)?.type || '')"></span>
+              </div>
+              
+              <span class="character-name">{{ getFullPieceLabel(getPieceAt(r, c)?.type || '', getPieceAt(r, c)?.color || '') }}</span>
             </div>
 
             <!-- Valid Move Overlay Dot / Ring -->
@@ -170,6 +176,37 @@ const PIECE_NAMES: Record<string, Record<string, string>> = {
 
 const getPieceCharacterName = (type: string, color: string) => {
   return PIECE_NAMES[color]?.[type] || '';
+};
+
+const getPieceChessRoleName = (type: string): string => {
+  const roles: Record<string, string> = {
+    k: 'Rey',
+    q: 'Reina',
+    r: 'Torre',
+    b: 'Alfil',
+    n: 'Caballo',
+    p: 'Peón'
+  };
+  return roles[type] || '';
+};
+
+const getFullPieceLabel = (type: string, color: string): string => {
+  const charName = getPieceCharacterName(type, color);
+  const roleName = getPieceChessRoleName(type);
+  return `${charName} (${roleName})`;
+};
+
+const CHESS_ICONS: Record<string, string> = {
+  k: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M12 2l1.5 3h3L15 7.5l1.5 3.5h-9L9 7.5 7.5 5h3L12 2zm-8 18h16v2H4v-2zm2-2h12v-6H6v6z" /></svg>`,
+  q: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M12 2a2 2 0 100 4 2 2 0 000-4zm-7 7l2.5 9h9l2.5-9-3.5 3.5L12 6l-3.5 6.5L5 9zm-1 11h16v2H4v-2z" /></svg>`,
+  r: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M5 2h3v2h3V2h2v2h3V2h3v4H5V2zm2 18h10v2H7v-2zm-1-2h12V8H6v10z" /></svg>`,
+  b: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M12 2a3 3 0 00-3 3c0 2.5 3 6.5 3 6.5s3-4 3-6.5a3 3 0 00-3-3zm-6 18h12v2H6v-2zm1-2h10V10H7v8z" /></svg>`,
+  n: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M19 22H5c0-4 2-7 3-9.5V11c0-2.5 1-4.5 3.5-4.5S15 8 15 10v2.5c0 1-1 2-2 2h-1v2.5c0 1.5 1 2.5 3 2.5h4v2.5z" /></svg>`,
+  p: `<svg viewBox="0 0 24 24" fill="currentColor" style="width: 100%; height: 100%; display: block;"><path d="M12 3a3.5 3.5 0 100 7 3.5 3.5 0 000-7zm-4 17h8v2H8v-2zm1-2h6v-6H9v6z" /></svg>`
+};
+
+const getChessRoleIcon = (type: string): string => {
+  return CHESS_ICONS[type] || '';
 };
 
 // Elegant, ultra-vibrant colored shadows representing dynamic powers!
@@ -509,6 +546,58 @@ const getGlowShadow = (type: string, color: string) => {
     left: 5px;
     right: 5px;
     bottom: 5px;
+  }
+}
+
+/* Chess Role Badge Style */
+.chess-role-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(12, 20, 36, 0.95);
+  border: 1.5px solid #d4af37;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 5;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5), 0 0 5px rgba(212, 175, 55, 0.3);
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  color: #ffd700;
+  padding: 3px;
+  box-sizing: border-box;
+}
+
+.piece-token.b .chess-role-badge {
+  background: rgba(5, 10, 20, 0.95);
+  border: 1.5px solid rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+
+.role-icon-svg {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.piece-token:hover .chess-role-badge {
+  transform: scale(1.2);
+  z-index: 6;
+}
+
+@media (max-width: 768px) {
+  .chess-role-badge {
+    width: 16px;
+    height: 16px;
+    border-width: 1px;
+    bottom: -1px;
+    right: -1px;
+    padding: 2px;
   }
 }
 </style>

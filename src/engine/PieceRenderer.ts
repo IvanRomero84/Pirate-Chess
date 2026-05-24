@@ -30,6 +30,8 @@ export class PieceRenderer {
   private pieces: Map<string, AbstractMesh> = new Map();
   private piecesBySquare: Map<string, AbstractMesh> = new Map();
   private selectionRing: Mesh | null = null;
+  private hoverRing: Mesh | null = null;
+  private hoverMaterial: PBRMaterial | null = null;
 
   // Fallback shared materials (only used when 3D models unavailable)
   private matFallback_w: PBRMaterial | null = null;
@@ -452,6 +454,71 @@ export class PieceRenderer {
     if (this.selectionRing) {
       this.selectionRing.isVisible = false;
     }
+  }
+
+  public highlightHoverPiece(id: string | null) {
+    if (!id) {
+      if (this.hoverRing) this.hoverRing.isVisible = false;
+      return;
+    }
+
+    const piece = this.pieces.get(id);
+    if (!piece) {
+      if (this.hoverRing) this.hoverRing.isVisible = false;
+      return;
+    }
+
+    const type = piece.metadata?.type as PieceType;
+    const color = piece.metadata?.color as PieceColor;
+    if (!type || !color) return;
+
+    if (!this.hoverRing) {
+      this.hoverRing = MeshBuilder.CreateTorus('hoverRing', {
+        diameter: 0.8,
+        thickness: 0.035,
+        tessellation: 32
+      }, this.scene);
+
+      this.hoverMaterial = new PBRMaterial('hoverRingMat', this.scene);
+      this.hoverMaterial.transparencyMode = 2; // MATERIAL_ALPHABLEND
+      this.hoverMaterial.alpha = 0.7;
+      this.hoverMaterial.metallic = 0.2;
+      this.hoverMaterial.roughness = 0.4;
+      this.hoverRing.material = this.hoverMaterial;
+    }
+
+    const color3 = this.getCharacterColor3(type, color);
+    if (this.hoverMaterial) {
+      this.hoverMaterial.emissiveColor = color3;
+      this.hoverMaterial.albedoColor = color3;
+    }
+
+    this.hoverRing.isVisible = true;
+    this.hoverRing.position = piece.position.clone();
+    this.hoverRing.position.y = 0.11; // ligeramente por debajo de la selección (0.12)
+  }
+
+  private getCharacterColor3(type: PieceType, color: PieceColor): Color3 {
+    if (color === 'w') {
+      switch (type) {
+        case 'k': return new Color3(1.0, 0.23, 0.23); // Luffy: Rojo fuego
+        case 'q': return new Color3(1.0, 0.57, 0.0);  // Nami: Naranja clima
+        case 'b': return new Color3(0.18, 0.83, 0.45); // Zoro: Verde espadas
+        case 'n': return new Color3(1.0, 0.84, 0.0);  // Sanji: Amarillo diable jambe
+        case 'r': return new Color3(0.11, 0.56, 1.0); // Jimbei: Azul gyojin
+        case 'p': return new Color3(0.0, 0.94, 1.0);  // Franky: Cian
+      }
+    } else {
+      switch (type) {
+        case 'k': return new Color3(0.83, 0.68, 0.21); // Sengoku: Oro Buda
+        case 'q': return new Color3(0.86, 0.04, 0.04); // Akainu: Rojo magma
+        case 'b': return new Color3(0.51, 0.88, 1.0);  // Kuzan: Hielo
+        case 'n': return new Color3(1.0, 1.0, 0.35);  // Kizaru: Luz láser
+        case 'r': return new Color3(0.61, 0.44, 0.9);  // Fujitora: Gravedad púrpura
+        case 'p': return new Color3(0.69, 0.77, 0.87); // Marine: Acero
+      }
+    }
+    return new Color3(1, 1, 1);
   }
 
   // ---------------------------------------------------------------------------

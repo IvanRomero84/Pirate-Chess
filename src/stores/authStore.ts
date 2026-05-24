@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { authService } from '../services/authService';
+import { markRaw } from 'vue';
 
 export const useAuthStore = defineStore('auth', {
   state: () => ({
@@ -17,7 +18,7 @@ export const useAuthStore = defineStore('auth', {
     init(): Promise<User | null> {
       return new Promise((resolve) => {
         onAuthStateChanged(auth, (user) => {
-          this.user = user;
+          this.user = user ? markRaw(user) : null;
           this.loading = false;
           resolve(user);
         });
@@ -34,7 +35,7 @@ export const useAuthStore = defineStore('auth', {
       this.clearMessages();
       try {
         const user = await authService.registerWithEmailAndPassword(email, password, username);
-        this.user = user;
+        this.user = user ? markRaw(user) : null;
         this.successMessage = '¡Tripulación registrada con éxito! Bienvenido al barco.';
         return true;
       } catch (error: any) {
@@ -51,7 +52,7 @@ export const useAuthStore = defineStore('auth', {
       this.clearMessages();
       try {
         const user = await authService.loginWithEmailAndPassword(email, password);
-        this.user = user;
+        this.user = user ? markRaw(user) : null;
         this.successMessage = 'Sesión iniciada. ¡Listo para zarpar!';
         return true;
       } catch (error: any) {
@@ -77,7 +78,7 @@ export const useAuthStore = defineStore('auth', {
         }
         
         if (user) {
-          this.user = user;
+          this.user = markRaw(user);
           this.successMessage = `¡Bienvenido a bordo, ${user.displayName || 'Pirata'}!`;
           return true;
         }
