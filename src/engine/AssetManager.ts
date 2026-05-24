@@ -91,9 +91,10 @@ export class AssetManager {
     root.setEnabled(true);
     root.isVisible = true;
 
-    // Attach the animation groups on the root mesh metadata for playability
+    // Attach the animation groups and skeletons on the root mesh metadata for playability
     root.metadata = {
-      animationGroups: entries.animationGroups
+      animationGroups: entries.animationGroups,
+      skeletons: entries.skeletons
     };
 
     return root;

@@ -570,34 +570,44 @@ export class PieceRenderer {
     return ags[0];
   }
 
-  private playIdleAnimation(piece: AbstractMesh) {
+  private stopAllAnimationsAndReset(piece: AbstractMesh) {
     const ags = piece.metadata?.animationGroups as AnimationGroup[];
-    if (!ags || ags.length === 0) return;
-    ags.forEach(ag => ag.stop());
+    if (ags && ags.length > 0) {
+      ags.forEach(ag => {
+        ag.stop();
+        ag.reset();
+      });
+    }
+    const skeletons = piece.metadata?.skeletons;
+    if (skeletons && skeletons.length > 0) {
+      skeletons.forEach((sk: any) => {
+        if (sk && typeof sk.returnToRest === 'function') {
+          sk.returnToRest();
+        }
+      });
+    }
+  }
+
+  private playIdleAnimation(piece: AbstractMesh) {
+    this.stopAllAnimationsAndReset(piece);
     const ag = this.getAnimationForPiece(piece, 'idle');
     if (ag) ag.start(true);
   }
 
   private playWalkAnimation(piece: AbstractMesh) {
-    const ags = piece.metadata?.animationGroups as AnimationGroup[];
-    if (!ags || ags.length === 0) return;
-    ags.forEach(ag => ag.stop());
+    this.stopAllAnimationsAndReset(piece);
     const ag = this.getAnimationForPiece(piece, 'walk');
     if (ag) ag.start(true);
   }
 
   private playAttackSkeletalAnimation(piece: AbstractMesh) {
-    const ags = piece.metadata?.animationGroups as AnimationGroup[];
-    if (!ags || ags.length === 0) return;
-    ags.forEach(ag => ag.stop());
+    this.stopAllAnimationsAndReset(piece);
     const ag = this.getAnimationForPiece(piece, 'attack');
     if (ag) ag.start(false); // play once — attacker snaps back to idle after
   }
 
   private playDeathAnimation(piece: AbstractMesh) {
-    const ags = piece.metadata?.animationGroups as AnimationGroup[];
-    if (!ags || ags.length === 0) return;
-    ags.forEach(ag => ag.stop());
+    this.stopAllAnimationsAndReset(piece);
     const ag = this.getAnimationForPiece(piece, 'death');
     if (ag) ag.start(false); // play once
   }
